@@ -1,0 +1,193 @@
+# CDS Admin UI Authentication Requirements
+
+## Goal
+
+The CDS Admin UI must authenticate human administrators using Keycloak and send Keycloak-issued DPoP-bound access tokens to the CDS Admin API.
+
+The Admin UI must not implement its own username/password login form. Login must be delegated to the standard Keycloak login page.
+
+## Identity Provider
+
+- Provider: Keycloak
+- Protocol: OpenID Connect / OAuth 2.0
+- Frontend flow: Authorization Code Flow with PKCE S256
+- Token used by CDS API calls: Keycloak JWT access token
+- Token binding: DPoP-bound access token
+- Resource request authorization scheme: `DPoP`
+
+## Required Runtime Config
+
+Use environment variables similar to:
+
+```env
+VITE_AUTH_MODE=keycloak-dpop
+VITE_KEYCLOAK_ISSUER=https://auth.example.com/realms/cds
+VITE_KEYCLOAK_CLIENT_ID=cds-admin-ui
+VITE_KEYCLOAK_SCOPE=openid profile email
+VITE_CDS_API_BASE_URL=
+```
+
+`VITE_CDS_API_BASE_URL` should normally be empty for same-origin API calls. If set, it must be an absolute API origin used only for special dev cases.
+
+## Keycloak Realm and Client
+
+Expected Keycloak configuration:
+
+- Realm: `cds`
+- Frontend client ID: `cds-admin-ui`
+- Client type: public SPA client
+- Client authentication: Off
+- Standard flow: On
+- PKCE method: S256
+- DPoP-bound tokens: enabled/required for the client
+- Valid redirect URI: Admin UI callback URL, for example `https://cds-admin.example.com/callback`
+- Web origin: Admin UI origin, for example `https://cds-admin.example.com`
+- Required backend role: `cds-admin`
+- Required backend audience: `cds-service`
+
+The frontend client must not have a client secret. Do not store any Keycloak secret in frontend code, `.env`, browser storage, or the generated JavaScript bundle.
+
+## Access Token Requirements
+
+The CDS backend expects the access token to contain values equivalent to:
+
+```json
+{
+  "iss": "https://auth.example.com/realms/cds",
+  "aud": "cds-service",
+  "azp": "cds-admin-ui",
+  "resource_access": {
+    "cds-service": {
+      "roles": ["cds-admin"]
+    }
+  },
+  "cnf": {
+    "jkt": "<dpop-public-key-thumbprint>"
+  }
+}
+```
+
+The frontend may inspect token claims only to improve UI messages. Frontend role checks are not a security boundary.
+
+## Browser DPoP Key
+
+The Admin UI must generate a browser-held DPoP key pair:
+
+- Algorithm: ECDSA P-256 / ES256
+- Use Web Crypto when available
+- Prefer memory or session-scoped storage
+- Do not store long-lived private keys in `localStorage`
+- Keep the same DPoP key for the login/session
+- Use the same DPoP key for token request, token refresh, logout when required, and CDS API calls
+
+The public JWK must have this form:
+
+```json
+{
+  "kty": "EC",
+  "crv": "P-256",
+  "x": "...",
+  "y": "..."
+}
+```
+
+## DPoP Proof Header
+
+Every DPoP proof JWT header must include:
+
+```json
+{
+  "typ": "dpop+jwt",
+  "alg": "ES256",
+  "jwk": {
+    "kty": "EC",
+    "crv": "P-256",
+    "x": "...",
+    "y": "..."
+  }
+}
+```
+
+## DPoP Proof Body for CDS Resource Requests
+
+Every CDS API request must use a freshly generated DPoP proof body:
+
+```json
+{
+  "jti": "fresh-random-id",
+  "htm": "GET",
+  "htu": "https://cds-admin.example.com/v1/device",
+  "iat": 1710000000,
+  "ath": "base64url-sha256-access-token"
+}
+```
+
+Rules:
+
+- `jti` must be unique for every proof/request.
+- `htm` must equal the actual request method in uppercase.
+- `htu` must equal the actual external request URL without query string or fragment.
+- `iat` must be current Unix time in seconds.
+- `ath` must be base64url(SHA-256(access_token)).
+- Do not reuse DPoP proofs.
+
+## Token Request Binding
+
+When exchanging the authorization code for tokens, the token request must include a DPoP proof in the `DPoP` header. The proof should be signed by the browser DPoP private key and use the Keycloak token endpoint URL as `htu`.
+
+If Keycloak/client policy requires strict OIDC DPoP binding, include the public key thumbprint using the `dpop_jkt` authorization request parameter.
+
+The generated code should discover Keycloak endpoints from:
+
+```text
+<VITE_KEYCLOAK_ISSUER>/.well-known/openid-configuration
+```
+
+Required endpoints from discovery:
+
+- `authorization_endpoint`
+- `token_endpoint`
+- `end_session_endpoint` when available
+
+## Token Refresh
+
+If refresh tokens are used, refresh requests for a DPoP-bound public client must also include a fresh DPoP proof signed with the same DPoP private key.
+
+Before every CDS API request, the app should ensure the access token is valid. If it is close to expiry, refresh it with a DPoP proof. If refresh fails, clear session state and redirect to Keycloak login.
+
+## Resource API Headers
+
+Send CDS Admin API requests with:
+
+```http
+Authorization: DPoP <keycloak_access_token>
+DPoP: <fresh_dpop_proof_jwt>
+Content-Type: application/json
+```
+
+`Content-Type` is required for `POST` and `PUT`. Do not send a JSON body for `DELETE /v1/device/{serial}`.
+
+## Logout
+
+Provide a logout action. It should clear local/session auth state and use Keycloak logout/end-session when available. If Keycloak requires DPoP for logout with a refresh token, include the required DPoP proof.
+
+## Optional Development Mock Mode
+
+The generated UI may include optional mock mode for UI-only development:
+
+```env
+VITE_AUTH_MODE=mock
+VITE_MOCK_ACCESS_TOKEN=dev-token
+```
+
+If mock mode is implemented:
+
+- Keep the same `useAuth()` interface as real auth mode.
+- Clearly label mock mode in the UI.
+- Do not enable mock mode by default in production builds.
+- Do not treat mock auth as secure.
+- Mock mode may bypass real DPoP only for offline UI development; real API integration must use Keycloak DPoP.
+
+## Backend Validation Reminder
+
+The Admin UI only obtains tokens and generates DPoP proofs. The CDS backend validates tokens/proofs and enforces authorization.

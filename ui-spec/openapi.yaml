@@ -1,0 +1,1099 @@
+openapi: 3.1.0
+info:
+  title: CDS API
+  description: |
+    OpenAPI specification for the Controller Discovery Service (CDS).
+
+    This service stores and serves device-to-controller endpoint mappings.
+    It exposes:
+      - a device-facing lookup API protected by mTLS at the Nginx layer
+      - admin APIs protected by Keycloak-issued DPoP-bound access tokens and cds-admin authorization
+      - an internal health endpoint for service readiness/liveness checks
+
+    Standard OpenAPI fields define the public API contract.
+    Custom x-* fields document runtime validation, processing flow,
+    response shaping, error handling, reliability, and idempotency.
+  version: 1.0.0
+  license:
+    name: AGPL-3.0 OR LicenseRef-Commercial
+
+tags:
+  - name: Health
+    description: Service health and readiness endpoints
+  - name: Device Lookup
+    description: Device-facing controller endpoint lookup APIs
+  - name: Device Admin
+    description: Admin APIs for managing device to controller mappings
+components:
+  securitySchemes:
+    DPoPAccessToken:
+      type: http
+      scheme: DPoP
+      description: |
+        Admin access token required by CDS admin APIs.
+
+        The header value must use the DPoP authorization scheme:
+
+        `Authorization: DPoP <keycloak_access_token>`.
+
+        The access token must be Keycloak-issued, DPoP-bound, and authorized for CDS admin access.
+    DPoPProof:
+      type: apiKey
+      in: header
+      name: DPoP
+      description: |
+        DPoP proof JWT required with every CDS admin API request.
+
+        The proof must correspond to the DPoP-bound access token sent in the Authorization header.
+    MutualTLS:
+      type: mutualTLS
+      description: 'Device-facing requests must present a valid client certificate at the Nginx listener.
+
+        Nginx verifies the client certificate before forwarding the request to CDS.
+
+        '
+  responses:
+    Success:
+      description: Operation completed successfully.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/StatusResponse'
+          examples:
+            ok:
+              value:
+                status: ok
+    NoContent:
+      description: Operation completed successfully with no response body.
+    BadRequest:
+      description: Request validation failed.
+      content:
+        text/plain:
+          schema:
+            type: string
+          examples:
+            addMissingFields:
+              value: serial and controller_endpoint are required
+            deleteMissingSerial:
+              value: serial path parameter is empty or whitespace after trimming
+            lookupMissingSerial:
+              value: serial required
+            generic:
+              value: bad request
+    Unauthorized:
+      description: Authentication or mTLS validation failed.
+      content:
+        text/plain:
+          schema:
+            type: string
+          examples:
+            clientCertRequired:
+              value: client certificate required
+            missingAccessToken:
+              value: missing Authorization header
+            invalidAuthorizationScheme:
+              value: Authorization scheme must be DPoP
+            missingDPoPProof:
+              value: missing DPoP proof
+            invalidAccessToken:
+              value: invalid access token
+            unknownAccessTokenKid:
+              value: unknown access token kid after JWKS refresh
+            invalidDPoPProof:
+              value: invalid DPoP proof
+            invalidDPoPProofIat:
+              value: invalid DPoP proof iat
+            invalidDPoPProofHtu:
+              value: invalid DPoP proof htu
+            replayedDPoPProof:
+              value: replayed DPoP proof
+    Forbidden:
+      description: Caller is authenticated but not authorized to perform this operation.
+      content:
+        text/plain:
+          schema:
+            type: string
+          examples:
+            missingRequiredRole:
+              value: missing required role cds-admin
+            invalidAdminClient:
+              value: invalid admin client
+            insufficientRole:
+              value: insufficient role
+    NotFound:
+      description: Requested device mapping was not found.
+      content:
+        text/plain:
+          schema:
+            type: string
+          examples:
+            noRow:
+              summary: No matching row found
+              value: 'sql: no rows in result set'
+    Conflict:
+      description: Database write failed during create-or-upsert and the handler reported the error as conflict.
+      content:
+        text/plain:
+          schema:
+            type: string
+    InternalServerError:
+      description: Internal server error.
+      content:
+        text/plain:
+          schema:
+            type: string
+          examples:
+            invalidKeycloakConfig:
+              value: server Keycloak configuration invalid
+            jwksFetchFailed:
+              value: failed to fetch Keycloak JWKS
+            ownedDeviceQueryFailed:
+              value: owned-device query fails
+            resultScanFailed:
+              value: result row scanning fails
+    MethodNotAllowed:
+      description: Method not allowed for this endpoint.
+      content:
+        text/plain:
+          schema:
+            type: string
+          examples:
+            methodNotAllowed:
+              value: Method not allowed
+
+  schemas:
+    StatusResponse:
+      type: object
+      description: Simple success response returned by mutation APIs that create a mapping.
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          description: Operation status string.
+          examples:
+            - ok
+
+    HealthResponse:
+      type: string
+      description: Plain-text health response emitted by the service.
+      examples:
+        - ok
+
+    DeviceLookupResponse:
+      type: object
+      description: Device lookup response containing the serial and resolved controller endpoint.
+      required:
+        - serial
+        - controller_endpoint
+      properties:
+        serial:
+          type: string
+          description: Lowercased device serial used for the lookup.
+          examples:
+            - b4:6a:d4:45:e9:5c
+        controller_endpoint:
+          type: string
+          description: Controller hostname mapped to the device serial.
+          examples:
+            - openwifi3.routerarchitects.com
+
+    DeviceMutationRequest:
+      type: object
+      description: Request payload for creating or updating a device mapping.
+      required:
+        - serial
+        - controller_endpoint
+      properties:
+        serial:
+          type: string
+          minLength: 1
+          description: Device serial. The service trims whitespace and stores it in lowercase.
+          examples:
+            - B4:6A:D4:45:E9:5C
+        controller_endpoint:
+          type: string
+          minLength: 1
+          description: Controller hostname to associate with the device.
+          examples:
+            - openwifi3.routerarchitects.com
+
+    DeviceListItem:
+      type: object
+      description: Owner-scoped device mapping entry returned by the list API.
+      required:
+        - serial
+        - controller_endpoint
+      properties:
+        serial:
+          type: string
+          description: Lowercased device serial.
+          examples:
+            - b4:6a:d4:45:e9:5c
+        controller_endpoint:
+          type: string
+          description: Controller hostname assigned to the serial.
+          examples:
+            - openwifi3.routerarchitects.com
+
+    DeviceListResponse:
+      type: array
+      description: List of device mappings owned by the validated Keycloak subject.
+      items:
+        $ref: '#/components/schemas/DeviceListItem'
+
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check
+      description: 'Internal health endpoint used by the container health check.
+
+        Returns plain text `ok` when the HTTP service is running.
+
+        '
+      operationId: getHealth
+      servers:
+        - url: http://localhost:8080
+          description: Internal CDS listener used for local health checks.
+      security: []
+      x-actor: internal platform
+      x-processing:
+        sequence:
+          - local:
+              process: return the plain-text health status
+      x-response-shaping:
+        transformations:
+          - return the plain text string ok with HTTP 200
+      x-error-handling:
+        local:
+          '405':
+            - request method does not match the endpoint contract
+        downstream:
+          passthrough: false
+        remap: []
+      x-reliability:
+        timeoutMs: 1000
+        retries: 0
+      responses:
+        '200':
+          description: Service is healthy.
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              examples:
+                ok:
+                  value: ok
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+
+  /v1/devices/{serial}:
+    get:
+      tags:
+        - Device Lookup
+      summary: Resolve controller endpoint for a device serial
+      description: 'Device-facing lookup API.
+
+
+        This endpoint is exposed behind the Nginx listener on port 4443 and requires
+        successful client-certificate validation. The handler reads the serial from the
+        path, normalizes it to lowercase, and returns the mapped controller endpoint
+        from the devices table.
+
+        '
+      operationId: getDeviceControllerEndpoint
+      servers:
+        - url: https://localhost:4443
+          description: Device-facing Nginx TLS endpoint with mTLS enforcement
+      security:
+        - MutualTLS: []
+      parameters:
+        - name: serial
+          in: path
+          required: true
+          description: Device serial to resolve. The service lowercases the value before lookup.
+          schema:
+            type: string
+      x-actor: authenticated device with valid client certificate
+      x-validation:
+        mtls:
+          - Nginx must verify the client certificate successfully before forwarding the request
+      x-processing:
+        sequence:
+          - local:
+              process: normalize the requested device serial to lowercase
+            variables:
+              normalizedSerial: lower(path.serial)
+          - service: storage-db
+            type: db
+            endpoint: GetEndpointBySerial
+            method: GET
+            requestMapping:
+              serial: normalizedSerial
+            variables:
+              controllerEndpoint: db.response.controller_endpoint
+          - local:
+              process: build the device lookup response payload
+            variables:
+              responseBody:
+                serial: normalizedSerial
+                controller_endpoint: controllerEndpoint
+      x-response-shaping:
+        transformations:
+          - return a JSON object containing the normalized serial and resolved controller_endpoint
+      x-error-handling:
+        local:
+          '400':
+            - serial required
+          '401':
+            - client certificate verification header is absent or not SUCCESS
+          '404':
+            - no controller mapping exists for the requested serial
+            - when no row matches the serial lookup, the handler returns the plain-text error body `sql: no rows in result set`
+          '405':
+            - request method does not match the endpoint contract
+        downstream:
+          passthrough: false
+        remap: []
+      x-reliability:
+        timeoutMs: 5000
+        retries: 0
+      responses:
+        '200':
+          description: Controller endpoint resolved successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceLookupResponse'
+              examples:
+                found:
+                  value:
+                    serial: b4:6a:d4:45:f0:19
+                    controller_endpoint: openwifi3.routerarchitects.com
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+
+  /v1/device:
+    post:
+      tags:
+        - Device Admin
+      summary: Create or upsert a device mapping for the validated Keycloak admin subject
+      description: |
+        Admin API that creates or upserts a device-to-controller mapping.
+
+        The caller must send `Authorization: DPoP <keycloak_access_token>` and a matching
+        `DPoP` proof JWT. The caller must be authorized for CDS admin access.
+
+        If the serial already exists, CDS updates the controller endpoint and owner scope using an UPSERT.
+      operationId: addDevice
+      servers:
+        - url: https://localhost:5443
+          description: Admin-facing Nginx TLS endpoint with Keycloak DPoP authentication
+      security:
+        - DPoPAccessToken: []
+          DPoPProof: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceMutationRequest'
+            examples:
+              sample:
+                value:
+                  serial: B4:6A:D4:45:E9:5C
+                  controller_endpoint: openwifi3.routerarchitects.com
+      x-actor: validated Keycloak admin with cds-admin role
+      x-validation:
+        accessToken:
+          - Authorization header must be present and use scheme DPoP
+          - access token signature must validate against cached Keycloak JWKS
+          - access token kid must resolve from cached Keycloak JWKS; if unknown, CDS refreshes JWKS once immediately and retries key lookup
+          - access token issuer must equal keycloakIssuerUrl
+          - access token audience must contain keycloakAudience
+          - access token must be unexpired and time-valid
+          - access token authorized party or client id must equal keycloakAdminUiClientId
+          - access token must contain keycloakRequiredRole as a Keycloak client role under resource_access[keycloakAudience].roles
+          - access token must contain cnf.jkt for DPoP binding
+        dpopProof:
+          - DPoP header must be present
+          - DPoP proof signature must validate using its embedded public jwk
+          - DPoP proof htm must match the request method
+          - DPoP proof htu must equal scheme + host + path of the externally visible request URL
+          - CDS must exclude query string and fragment from htu comparison
+          - CDS must trust X-Forwarded-Proto, X-Forwarded-Host, and X-Forwarded-Port only when request remote address matches trustedProxyCidrs
+          - If request is not from a trusted proxy, CDS must derive scheme/host from the direct connection and Host header
+          - Precedence when behind trusted proxy: X-Forwarded-Proto > connection scheme; X-Forwarded-Host > Host header
+          - CDS may use X-Forwarded-Port from trusted proxies when externally visible port is not implied by scheme
+          - Nginx must overwrite incoming X-Forwarded-Proto, X-Forwarded-Host, and X-Forwarded-Port before forwarding to CDS
+          - CDS ignores Forwarded header
+          - DPoP proof iat must be within dpopProofMaxAgeSeconds with dpopClockSkewSeconds allowed clock skew
+          - DPoP proof ath must match the access token hash
+          - DPoP proof jti must not have been used within dpopJtiCacheTtlSeconds
+          - thumbprint(DPoP proof public key) must equal access_token.cnf.jkt
+      x-idempotency:
+        enabled: true
+        mode: create
+        keyFields:
+          - serial
+          - owner_scope
+        idempotentWhen:
+          sameNormalizedSerialOwnerAndControllerEndpoint: true
+        onRepeat:
+          stateChange: none when controller_endpoint is unchanged; otherwise the existing row is updated
+          returnsCreated: true
+          updatesExistingRecord: true
+        note: Repeating add for the same normalized serial, validated Keycloak subject, and same controller_endpoint does
+          not create a duplicate row; CDS upserts the mapping and still returns HTTP 201 on success.
+      x-processing:
+        sequence:
+          - local:
+              process: resolve Keycloak DPoP and trusted proxy runtime configuration
+            variables:
+              authMode: env.AUTH_MODE
+              keycloakIssuerUrl: env.KEYCLOAK_ISSUER_URL
+              keycloakJwksUrl: env.KEYCLOAK_JWKS_URL
+              keycloakAudience: env.KEYCLOAK_AUDIENCE
+              keycloakRequiredRole: env.KEYCLOAK_REQUIRED_ROLE
+              keycloakAdminUiClientId: env.KEYCLOAK_ADMIN_UI_CLIENT_ID
+              dpopRequired: env.DPOP_REQUIRED
+              dpopJtiCacheTtlSeconds: env.DPOP_JTI_CACHE_TTL_SECONDS
+              dpopProofMaxAgeSeconds: env.DPOP_PROOF_MAX_AGE_SECONDS
+              dpopClockSkewSeconds: env.DPOP_CLOCK_SKEW_SECONDS
+              jwksCacheTtlSeconds: env.JWKS_CACHE_TTL_SECONDS
+              trustedProxyCidrs: env.TRUSTED_PROXY_CIDRS
+          - local:
+              process: normalize the request serial, validate controller_endpoint as non-empty after trimming, and prepare the
+                owned create-or-upsert inputs
+            variables:
+              normalizedSerial: lower(trim(body.serial))
+              requestedControllerEndpoint: body.controller_endpoint
+          - local:
+              process: >
+                validate Keycloak DPoP admin request locally using cached JWKS and DPoP proof binding rules with the resolved runtime configuration
+            variables:
+              accessTokenKid: access_token.header.kid
+              jwksKeyFound: local.result.jwksKeyFound
+              adminSubject: access_token.sub
+              ownerScope: access_token.sub
+              adminClientId: access_token.azp or access_token.client_id
+              adminRoles: access_token.resource_access[keycloakAudience].roles
+              dpopJkt: access_token.cnf.jkt
+              dpopJti: dpop_proof.jti
+              dpopHtu: dpop_proof.htu
+          - service: keycloak
+            type: https
+            endpoint: /realms/cds/protocol/openid-connect/certs
+            method: GET
+            when: jwksKeyFound == false
+            requestMapping:
+              jwksUrl: keycloakJwksUrl
+            variables:
+              refreshedJwks: http.response
+          - local:
+              process: update the local JWKS cache with refreshedJwks and retry access token signature validation once
+            when: jwksKeyFound == false
+            variables:
+              jwksKeyFoundAfterRefresh: local.result.jwksKeyFound
+          - service: storage-db
+            type: db
+            endpoint: AddDevice
+            method: POST
+            requestMapping:
+              serial: normalizedSerial
+              controller_endpoint: requestedControllerEndpoint
+              owner_scope: ownerScope
+            variables:
+              persistedMapping: device mapping inserted or updated for the validated Keycloak subject owner scope
+          - local:
+              process: return the successful create-or-upsert response
+            variables:
+              responseBody:
+                status: ok
+      x-response-shaping:
+        transformations:
+          - return HTTP 201 with JSON body { status: ok } after a successful insert or upsert
+      x-error-handling:
+        local:
+          '401':
+            - missing Authorization header
+            - Authorization scheme is not DPoP
+            - missing DPoP proof
+            - invalid access token
+            - unknown access token kid after one JWKS refresh
+            - invalid DPoP proof
+            - DPoP proof htu does not match the externally visible request URL excluding query string and fragment
+            - DPoP proof iat is outside dpopProofMaxAgeSeconds with dpopClockSkewSeconds allowed clock skew
+            - replayed DPoP proof
+          '403':
+            - missing required role cds-admin
+            - invalid admin client
+            - insufficient role
+          '405':
+            - request method does not match the endpoint contract
+          '500':
+            - server Keycloak configuration invalid
+            - failed to fetch Keycloak JWKS
+          '400':
+            - request body is not valid JSON
+            - serial is empty
+            - controller_endpoint is empty
+          '409':
+            - database operation fails and the handler reports the returned error as conflict
+        downstream:
+          passthrough: false
+          propagatedStatuses: Keycloak JWKS fetch failures are handled locally and not passed through directly
+        remap: []
+      x-reliability:
+        timeoutMs: 15000
+        retries: 0
+      responses:
+        '201':
+          $ref: '#/components/responses/Success'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    put:
+      tags:
+        - Device Admin
+      summary: Update a device mapping owned by the validated Keycloak admin subject
+      description: |
+        Admin API that updates the controller endpoint for an existing device mapping.
+
+        The caller must send `Authorization: DPoP <keycloak_access_token>` and a matching
+        `DPoP` proof JWT. The caller must be authorized for CDS admin access.
+
+        If no owned row matches the requested serial, the API returns 404.
+      operationId: updateDevice
+      servers:
+        - url: https://localhost:5443
+          description: Admin-facing Nginx TLS endpoint with Keycloak DPoP authentication
+      security:
+        - DPoPAccessToken: []
+          DPoPProof: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceMutationRequest'
+            examples:
+              sample:
+                value:
+                  serial: B4:6A:D4:45:E9:5C
+                  controller_endpoint: openwifi3.routerarchitects.com
+      x-actor: validated Keycloak admin with cds-admin role
+      x-validation:
+        accessToken:
+          - Authorization header must be present and use scheme DPoP
+          - access token signature must validate against cached Keycloak JWKS
+          - access token kid must resolve from cached Keycloak JWKS; if unknown, CDS refreshes JWKS once immediately and retries key lookup
+          - access token issuer must equal keycloakIssuerUrl
+          - access token audience must contain keycloakAudience
+          - access token must be unexpired and time-valid
+          - access token authorized party or client id must equal keycloakAdminUiClientId
+          - access token must contain keycloakRequiredRole as a Keycloak client role under resource_access[keycloakAudience].roles
+          - access token must contain cnf.jkt for DPoP binding
+        dpopProof:
+          - DPoP header must be present
+          - DPoP proof signature must validate using its embedded public jwk
+          - DPoP proof htm must match the request method
+          - DPoP proof htu must equal scheme + host + path of the externally visible request URL
+          - CDS must exclude query string and fragment from htu comparison
+          - CDS must trust X-Forwarded-Proto, X-Forwarded-Host, and X-Forwarded-Port only when request remote address matches trustedProxyCidrs
+          - If request is not from a trusted proxy, CDS must derive scheme/host from the direct connection and Host header
+          - Precedence when behind trusted proxy: X-Forwarded-Proto > connection scheme; X-Forwarded-Host > Host header
+          - CDS may use X-Forwarded-Port from trusted proxies when externally visible port is not implied by scheme
+          - Nginx must overwrite incoming X-Forwarded-Proto, X-Forwarded-Host, and X-Forwarded-Port before forwarding to CDS
+          - CDS ignores Forwarded header
+          - DPoP proof iat must be within dpopProofMaxAgeSeconds with dpopClockSkewSeconds allowed clock skew
+          - DPoP proof ath must match the access token hash
+          - DPoP proof jti must not have been used within dpopJtiCacheTtlSeconds
+          - thumbprint(DPoP proof public key) must equal access_token.cnf.jkt
+        ownership:
+          - target device row must exist with owner scope equal to the validated Keycloak subject
+      x-idempotency:
+        enabled: true
+        mode: update
+        keyFields:
+          - serial
+          - owner_scope
+          - controller_endpoint
+        idempotentWhen:
+          sameNormalizedTargetState: true
+        onRepeat:
+          stateChange: none
+          reappliesSameState: true
+        note: Repeating the same update for the same owned device and normalized controller endpoint leaves the mapping in
+          the same final state.
+      x-processing:
+        sequence:
+          - local:
+              process: resolve Keycloak DPoP and trusted proxy runtime configuration
+            variables:
+              authMode: env.AUTH_MODE
+              keycloakIssuerUrl: env.KEYCLOAK_ISSUER_URL
+              keycloakJwksUrl: env.KEYCLOAK_JWKS_URL
+              keycloakAudience: env.KEYCLOAK_AUDIENCE
+              keycloakRequiredRole: env.KEYCLOAK_REQUIRED_ROLE
+              keycloakAdminUiClientId: env.KEYCLOAK_ADMIN_UI_CLIENT_ID
+              dpopRequired: env.DPOP_REQUIRED
+              dpopJtiCacheTtlSeconds: env.DPOP_JTI_CACHE_TTL_SECONDS
+              dpopProofMaxAgeSeconds: env.DPOP_PROOF_MAX_AGE_SECONDS
+              dpopClockSkewSeconds: env.DPOP_CLOCK_SKEW_SECONDS
+              jwksCacheTtlSeconds: env.JWKS_CACHE_TTL_SECONDS
+              trustedProxyCidrs: env.TRUSTED_PROXY_CIDRS
+          - local:
+              process: normalize the request serial, validate controller_endpoint as non-empty after trimming, and prepare the
+                owned update inputs
+            variables:
+              normalizedSerial: lower(trim(body.serial))
+              requestedControllerEndpoint: body.controller_endpoint
+          - local:
+              process: >
+                validate Keycloak DPoP admin request locally using cached JWKS and DPoP proof binding rules with the resolved runtime configuration
+            variables:
+              accessTokenKid: access_token.header.kid
+              jwksKeyFound: local.result.jwksKeyFound
+              adminSubject: access_token.sub
+              ownerScope: access_token.sub
+              adminClientId: access_token.azp or access_token.client_id
+              adminRoles: access_token.resource_access[keycloakAudience].roles
+              dpopJkt: access_token.cnf.jkt
+              dpopJti: dpop_proof.jti
+              dpopHtu: dpop_proof.htu
+          - service: keycloak
+            type: https
+            endpoint: /realms/cds/protocol/openid-connect/certs
+            method: GET
+            when: jwksKeyFound == false
+            requestMapping:
+              jwksUrl: keycloakJwksUrl
+            variables:
+              refreshedJwks: http.response
+          - local:
+              process: update the local JWKS cache with refreshedJwks and retry access token signature validation once
+            when: jwksKeyFound == false
+            variables:
+              jwksKeyFoundAfterRefresh: local.result.jwksKeyFound
+          - service: storage-db
+            type: db
+            endpoint: UpdateDevice
+            method: PUT
+            requestMapping:
+              serial: normalizedSerial
+              controller_endpoint: requestedControllerEndpoint
+              owner_scope: ownerScope
+            variables:
+              updatedMapping: owned device mapping updated to the requested controller endpoint
+      x-response-shaping:
+        transformations:
+          - return HTTP 204 with no response body when the owned mapping is updated successfully
+      x-error-handling:
+        local:
+          '401':
+            - missing Authorization header
+            - Authorization scheme is not DPoP
+            - missing DPoP proof
+            - invalid access token
+            - unknown access token kid after one JWKS refresh
+            - invalid DPoP proof
+            - DPoP proof htu does not match the externally visible request URL excluding query string and fragment
+            - DPoP proof iat is outside dpopProofMaxAgeSeconds with dpopClockSkewSeconds allowed clock skew
+            - replayed DPoP proof
+          '403':
+            - missing required role cds-admin
+            - invalid admin client
+            - insufficient role
+          '405':
+            - request method does not match the endpoint contract
+          '500':
+            - server Keycloak configuration invalid
+            - failed to fetch Keycloak JWKS
+          '400':
+            - request body is not valid JSON
+            - serial is empty
+            - controller_endpoint is empty
+          '404':
+            - no owned device mapping exists for the requested serial
+            - the handler returns the underlying not-found error body when no database row matches
+        downstream:
+          passthrough: false
+          propagatedStatuses: Keycloak JWKS fetch failures are handled locally and not passed through directly
+        remap: []
+      x-reliability:
+        timeoutMs: 15000
+        retries: 0
+      responses:
+        '204':
+          $ref: '#/components/responses/NoContent'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    get:
+      tags:
+        - Device Admin
+      summary: List device mappings owned by the validated Keycloak admin subject
+      description: |
+        Admin API that lists device mappings visible to the authenticated CDS admin caller.
+
+        The caller must send `Authorization: DPoP <keycloak_access_token>` and a matching
+        `DPoP` proof JWT. The caller must be authorized for CDS admin access.
+      operationId: listDevices
+      servers:
+        - url: https://localhost:5443
+          description: Admin-facing Nginx TLS endpoint with Keycloak DPoP authentication
+      security:
+        - DPoPAccessToken: []
+          DPoPProof: []
+      x-actor: validated Keycloak admin with cds-admin role
+      x-validation:
+        accessToken:
+          - Authorization header must be present and use scheme DPoP
+          - access token signature must validate against cached Keycloak JWKS
+          - access token kid must resolve from cached Keycloak JWKS; if unknown, CDS refreshes JWKS once immediately and retries key lookup
+          - access token issuer must equal keycloakIssuerUrl
+          - access token audience must contain keycloakAudience
+          - access token must be unexpired and time-valid
+          - access token authorized party or client id must equal keycloakAdminUiClientId
+          - access token must contain keycloakRequiredRole as a Keycloak client role under resource_access[keycloakAudience].roles
+          - access token must contain cnf.jkt for DPoP binding
+        dpopProof:
+          - DPoP header must be present
+          - DPoP proof signature must validate using its embedded public jwk
+          - DPoP proof htm must match the request method
+          - DPoP proof htu must equal scheme + host + path of the externally visible request URL
+          - CDS must exclude query string and fragment from htu comparison
+          - CDS must trust X-Forwarded-Proto, X-Forwarded-Host, and X-Forwarded-Port only when request remote address matches trustedProxyCidrs
+          - If request is not from a trusted proxy, CDS must derive scheme/host from the direct connection and Host header
+          - Precedence when behind trusted proxy: X-Forwarded-Proto > connection scheme; X-Forwarded-Host > Host header
+          - CDS may use X-Forwarded-Port from trusted proxies when externally visible port is not implied by scheme
+          - Nginx must overwrite incoming X-Forwarded-Proto, X-Forwarded-Host, and X-Forwarded-Port before forwarding to CDS
+          - CDS ignores Forwarded header
+          - DPoP proof iat must be within dpopProofMaxAgeSeconds with dpopClockSkewSeconds allowed clock skew
+          - DPoP proof ath must match the access token hash
+          - DPoP proof jti must not have been used within dpopJtiCacheTtlSeconds
+          - thumbprint(DPoP proof public key) must equal access_token.cnf.jkt
+      x-processing:
+        sequence:
+          - local:
+              process: resolve Keycloak DPoP and trusted proxy runtime configuration
+            variables:
+              authMode: env.AUTH_MODE
+              keycloakIssuerUrl: env.KEYCLOAK_ISSUER_URL
+              keycloakJwksUrl: env.KEYCLOAK_JWKS_URL
+              keycloakAudience: env.KEYCLOAK_AUDIENCE
+              keycloakRequiredRole: env.KEYCLOAK_REQUIRED_ROLE
+              keycloakAdminUiClientId: env.KEYCLOAK_ADMIN_UI_CLIENT_ID
+              dpopRequired: env.DPOP_REQUIRED
+              dpopJtiCacheTtlSeconds: env.DPOP_JTI_CACHE_TTL_SECONDS
+              dpopProofMaxAgeSeconds: env.DPOP_PROOF_MAX_AGE_SECONDS
+              dpopClockSkewSeconds: env.DPOP_CLOCK_SKEW_SECONDS
+              jwksCacheTtlSeconds: env.JWKS_CACHE_TTL_SECONDS
+              trustedProxyCidrs: env.TRUSTED_PROXY_CIDRS
+          - local:
+              process: >
+                validate Keycloak DPoP admin request locally using cached JWKS and DPoP proof binding rules with the resolved runtime configuration
+            variables:
+              accessTokenKid: access_token.header.kid
+              jwksKeyFound: local.result.jwksKeyFound
+              adminSubject: access_token.sub
+              ownerScope: access_token.sub
+              adminClientId: access_token.azp or access_token.client_id
+              adminRoles: access_token.resource_access[keycloakAudience].roles
+              dpopJkt: access_token.cnf.jkt
+              dpopJti: dpop_proof.jti
+              dpopHtu: dpop_proof.htu
+          - service: keycloak
+            type: https
+            endpoint: /realms/cds/protocol/openid-connect/certs
+            method: GET
+            when: jwksKeyFound == false
+            requestMapping:
+              jwksUrl: keycloakJwksUrl
+            variables:
+              refreshedJwks: http.response
+          - local:
+              process: update the local JWKS cache with refreshedJwks and retry access token signature validation once
+            when: jwksKeyFound == false
+            variables:
+              jwksKeyFoundAfterRefresh: local.result.jwksKeyFound
+          - service: storage-db
+            type: db
+            endpoint: ListDevicesByOwner
+            method: GET
+            requestMapping:
+              owner_scope: ownerScope
+            variables:
+              devices: db.response
+          - local:
+              process: return the owned device mappings ordered by serial
+      x-response-shaping:
+        transformations:
+          - return the owned device mappings as a JSON array of { serial, controller_endpoint }
+          - if the owner has no devices, return an empty array
+      x-error-handling:
+        local:
+          '401':
+            - missing Authorization header
+            - Authorization scheme is not DPoP
+            - missing DPoP proof
+            - invalid access token
+            - unknown access token kid after one JWKS refresh
+            - invalid DPoP proof
+            - DPoP proof htu does not match the externally visible request URL excluding query string and fragment
+            - DPoP proof iat is outside dpopProofMaxAgeSeconds with dpopClockSkewSeconds allowed clock skew
+            - replayed DPoP proof
+          '403':
+            - missing required role cds-admin
+            - invalid admin client
+            - insufficient role
+          '405':
+            - request method does not match the endpoint contract
+          '500':
+            - server Keycloak configuration invalid
+            - failed to fetch Keycloak JWKS
+            - owned-device query fails
+            - result row scanning fails
+        downstream:
+          passthrough: false
+          propagatedStatuses: Keycloak JWKS fetch failures are handled locally and not passed through directly
+        remap: []
+      x-reliability:
+        timeoutMs: 15000
+        retries: 0
+      responses:
+        '200':
+          description: Owner-scoped device mappings.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceListResponse'
+              examples:
+                devices:
+                  value:
+                    - serial: 60:cf:84:f1:f6:60
+                      controller_endpoint: openwifi3.routerarchitects.com
+                    - serial: 60:cf:84:f2:24:c8
+                      controller_endpoint: openwifi1.routerarchitects.com
+                    - serial: 60:cf:84:f2:2d:58
+                      controller_endpoint: openwifi1.routerarchitects.com
+                    - serial: b4:6a:d4:45:f0:19
+                      controller_endpoint: openwifi3.routerarchitects.com
+                    - serial: f0:09:0d:d6:a2:51
+                      controller_endpoint: openwifi1.routerarchitects.com
+                empty:
+                  value: []
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /v1/device/{serial}:
+    delete:
+      tags:
+        - Device Admin
+      summary: Delete a device mapping owned by the validated Keycloak admin subject
+      description: |
+        Admin API that deletes an owned device mapping.
+
+        The caller must send `Authorization: DPoP <keycloak_access_token>` and a matching
+        `DPoP` proof JWT. The caller must be authorized for CDS admin access.
+
+        The target device serial is supplied as a required path parameter.
+        If no owned row matches the requested serial, the API returns 404.
+      operationId: deleteDevice
+      servers:
+        - url: https://localhost:5443
+          description: Admin-facing Nginx TLS endpoint with Keycloak DPoP authentication
+      security:
+        - DPoPAccessToken: []
+          DPoPProof: []
+      parameters:
+        - name: serial
+          in: path
+          required: true
+          description: Device serial to delete. The service trims whitespace and lowercases it.
+          schema:
+            type: string
+            minLength: 1
+            pattern: '.*\S.*'
+      x-actor: validated Keycloak admin with cds-admin role
+      x-validation:
+        accessToken:
+          - Authorization header must be present and use scheme DPoP
+          - access token signature must validate against cached Keycloak JWKS
+          - access token kid must resolve from cached Keycloak JWKS; if unknown, CDS refreshes JWKS once immediately and retries key lookup
+          - access token issuer must equal keycloakIssuerUrl
+          - access token audience must contain keycloakAudience
+          - access token must be unexpired and time-valid
+          - access token authorized party or client id must equal keycloakAdminUiClientId
+          - access token must contain keycloakRequiredRole as a Keycloak client role under resource_access[keycloakAudience].roles
+          - access token must contain cnf.jkt for DPoP binding
+        dpopProof:
+          - DPoP header must be present
+          - DPoP proof signature must validate using its embedded public jwk
+          - DPoP proof htm must match the request method
+          - DPoP proof htu must equal scheme + host + path of the externally visible request URL
+          - CDS must exclude query string and fragment from htu comparison
+          - CDS must trust X-Forwarded-Proto, X-Forwarded-Host, and X-Forwarded-Port only when request remote address matches trustedProxyCidrs
+          - If request is not from a trusted proxy, CDS must derive scheme/host from the direct connection and Host header
+          - Precedence when behind trusted proxy: X-Forwarded-Proto > connection scheme; X-Forwarded-Host > Host header
+          - CDS may use X-Forwarded-Port from trusted proxies when externally visible port is not implied by scheme
+          - Nginx must overwrite incoming X-Forwarded-Proto, X-Forwarded-Host, and X-Forwarded-Port before forwarding to CDS
+          - CDS ignores Forwarded header
+          - DPoP proof iat must be within dpopProofMaxAgeSeconds with dpopClockSkewSeconds allowed clock skew
+          - DPoP proof ath must match the access token hash
+          - DPoP proof jti must not have been used within dpopJtiCacheTtlSeconds
+          - thumbprint(DPoP proof public key) must equal access_token.cnf.jkt
+        ownership:
+          - target device row must exist with owner scope equal to the validated Keycloak subject
+      x-idempotency:
+        enabled: true
+        mode: delete
+        keyFields:
+          - serial
+          - owner_scope
+        onRepeat:
+          stateChange: none
+          returnsNotFound: true
+        note: Repeating delete after the owned mapping has already been removed does not change state again and may return
+          not found.
+      x-processing:
+        sequence:
+          - local:
+              process: resolve Keycloak DPoP and trusted proxy runtime configuration
+            variables:
+              authMode: env.AUTH_MODE
+              keycloakIssuerUrl: env.KEYCLOAK_ISSUER_URL
+              keycloakJwksUrl: env.KEYCLOAK_JWKS_URL
+              keycloakAudience: env.KEYCLOAK_AUDIENCE
+              keycloakRequiredRole: env.KEYCLOAK_REQUIRED_ROLE
+              keycloakAdminUiClientId: env.KEYCLOAK_ADMIN_UI_CLIENT_ID
+              dpopRequired: env.DPOP_REQUIRED
+              dpopJtiCacheTtlSeconds: env.DPOP_JTI_CACHE_TTL_SECONDS
+              dpopProofMaxAgeSeconds: env.DPOP_PROOF_MAX_AGE_SECONDS
+              dpopClockSkewSeconds: env.DPOP_CLOCK_SKEW_SECONDS
+              jwksCacheTtlSeconds: env.JWKS_CACHE_TTL_SECONDS
+              trustedProxyCidrs: env.TRUSTED_PROXY_CIDRS
+          - local:
+              process: normalize the requested device serial and prepare the owned delete inputs
+            variables:
+              normalizedSerial: lower(trim(path.serial))
+          - local:
+              process: >
+                validate Keycloak DPoP admin request locally using cached JWKS and DPoP proof binding rules with the resolved runtime configuration
+            variables:
+              accessTokenKid: access_token.header.kid
+              jwksKeyFound: local.result.jwksKeyFound
+              adminSubject: access_token.sub
+              ownerScope: access_token.sub
+              adminClientId: access_token.azp or access_token.client_id
+              adminRoles: access_token.resource_access[keycloakAudience].roles
+              dpopJkt: access_token.cnf.jkt
+              dpopJti: dpop_proof.jti
+              dpopHtu: dpop_proof.htu
+          - service: keycloak
+            type: https
+            endpoint: /realms/cds/protocol/openid-connect/certs
+            method: GET
+            when: jwksKeyFound == false
+            requestMapping:
+              jwksUrl: keycloakJwksUrl
+            variables:
+              refreshedJwks: http.response
+          - local:
+              process: update the local JWKS cache with refreshedJwks and retry access token signature validation once
+            when: jwksKeyFound == false
+            variables:
+              jwksKeyFoundAfterRefresh: local.result.jwksKeyFound
+          - service: storage-db
+            type: db
+            endpoint: DeleteDevice
+            method: DELETE
+            requestMapping:
+              serial: normalizedSerial
+              owner_scope: ownerScope
+            variables:
+              deletedMapping: owned device mapping removed from storage
+      x-response-shaping:
+        transformations:
+          - return HTTP 204 with no response body after a successful delete
+      x-error-handling:
+        local:
+          '401':
+            - missing Authorization header
+            - Authorization scheme is not DPoP
+            - missing DPoP proof
+            - invalid access token
+            - unknown access token kid after one JWKS refresh
+            - invalid DPoP proof
+            - DPoP proof htu does not match the externally visible request URL excluding query string and fragment
+            - DPoP proof iat is outside dpopProofMaxAgeSeconds with dpopClockSkewSeconds allowed clock skew
+            - replayed DPoP proof
+          '403':
+            - missing required role cds-admin
+            - invalid admin client
+            - insufficient role
+          '405':
+            - request method does not match the endpoint contract
+          '500':
+            - server Keycloak configuration invalid
+            - failed to fetch Keycloak JWKS
+          '400':
+            - serial path parameter is empty or whitespace after trimming
+          '404':
+            - no owned device mapping exists for the requested serial
+            - the handler returns the underlying not-found error body when no database row matches
+        downstream:
+          passthrough: false
+          propagatedStatuses: Keycloak JWKS fetch failures are handled locally and not passed through directly
+        remap: []
+      x-reliability:
+        timeoutMs: 15000
+        retries: 0
+      responses:
+        '204':
+          $ref: '#/components/responses/NoContent'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
