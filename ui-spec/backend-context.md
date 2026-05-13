@@ -1,4 +1,4 @@
-# Backend Context for Codex / ChatGPT
+# Backend Context for UI Generation
 
 ## Existing Service
 

@@ -1,4 +1,4 @@
-# Prompt for LLM / ChatGPT UI Code Generation
+# Prompt for LLM UI Code Generation
 
 Generate a production-ready React + Vite + TypeScript Admin UI for the CDS backend.
 
