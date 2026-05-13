@@ -359,9 +359,9 @@ Handle these cases:
 - 401: session expired, invalid access token, missing/invalid DPoP proof, or replayed DPoP proof.
 - 403: user lacks required role or invalid admin client.
 - 404: device not found on update/delete.
-- 409: owner conflict or write conflict.
+- 409: device already exists for another owner.
 - 413: request body too large.
-- 500: server configuration/JWKS/internal error.
+- 500: server configuration/JWKS/internal error, including generic database/write failures.
 - Network/TLS failures.
 
 Do not log raw tokens or DPoP proofs.
