@@ -80,6 +80,18 @@ The Admin UI must generate a browser-held DPoP key pair:
 - Keep the same DPoP key for the login/session
 - Use the same DPoP key for token request, token refresh, logout when required, and CDS API calls
 
+## Redirect-Safe DPoP Key Persistence
+
+The Admin UI must preserve the same DPoP key across the OIDC authorization redirect and callback.
+
+Generate the DPoP key before starting the authorization request. If a full-page redirect is used, export and store the private/public JWK only in `sessionStorage` as session-scoped auth state before redirecting to Keycloak. On `/callback`, restore the same key from `sessionStorage` before exchanging the authorization code for tokens.
+
+The token request must use the same DPoP key whose public key thumbprint was sent as `dpop_jkt` during the authorization request.
+
+Clear the session-scoped DPoP key material on logout, auth failure, refresh failure, or when starting a new login flow.
+
+Do not store the DPoP private key in `localStorage`. Do not persist DPoP private key material beyond the browser session.
+
 The public JWK must have this form:
 
 ```json
@@ -148,6 +160,20 @@ Required endpoints from discovery:
 - `authorization_endpoint`
 - `token_endpoint`
 - `end_session_endpoint` when available
+
+## DPoP Nonce Handling
+
+For token, refresh, and logout requests, Keycloak may require a DPoP nonce.
+
+If Keycloak returns a DPoP nonce challenge, the app must read the nonce from the response header, such as `DPoP-Nonce`, or from the error response when provided. The app must then regenerate the DPoP proof with the `nonce` claim and retry the request once.
+
+The app must not retry indefinitely. If the nonce retry fails, the app must treat the request as failed and show a clear auth error or force a new login as appropriate.
+
+Nonce handling applies to:
+
+- authorization code token exchange
+- refresh token requests
+- logout/end-session requests when Keycloak requires DPoP
 
 ## Token Refresh
 

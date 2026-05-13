@@ -80,6 +80,15 @@ components:
               value: serial required
             generic:
               value: bad request
+    PayloadTooLarge:
+      description: Request body exceeds the 1 MiB admin request body limit.
+      content:
+        text/plain:
+          schema:
+            type: string
+          examples:
+            requestBodyTooLarge:
+              value: request body too large
     Unauthorized:
       description: Authentication or mTLS validation failed.
       content:
@@ -131,11 +140,14 @@ components:
               summary: No matching row found
               value: 'sql: no rows in result set'
     Conflict:
-      description: Database write failed during create-or-upsert and the handler reported the error as conflict.
+      description: Device already exists for another owner.
       content:
         text/plain:
           schema:
             type: string
+          examples:
+            deviceOwnerConflict:
+              value: device already exists for another owner
     InternalServerError:
       description: Internal server error.
       content:
@@ -392,7 +404,8 @@ paths:
         The caller must send `Authorization: DPoP <keycloak_access_token>` and a matching
         `DPoP` proof JWT. The caller must be authorized for CDS admin access.
 
-        If the serial already exists, CDS updates the controller endpoint and owner scope using an UPSERT.
+        If the serial already exists for the same validated owner, CDS updates the controller endpoint.
+        If the serial belongs to another owner, CDS returns 409 Conflict.
       operationId: addDevice
       servers:
         - url: https://localhost:5443
@@ -542,12 +555,16 @@ paths:
           '500':
             - server Keycloak configuration invalid
             - failed to fetch Keycloak JWKS
+            - generic database write failure
+            - internal server error
           '400':
             - request body is not valid JSON
             - serial is empty
             - controller_endpoint is empty
+          '413':
+            - request body exceeds the 1 MiB admin request body limit
           '409':
-            - database operation fails and the handler reports the returned error as conflict
+            - device already exists for another owner
         downstream:
           passthrough: false
           propagatedStatuses: Keycloak JWKS fetch failures are handled locally and not passed through directly
@@ -560,6 +577,8 @@ paths:
           $ref: '#/components/responses/Success'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
         '403':
           $ref: '#/components/responses/Forbidden'
         '405':
@@ -731,9 +750,11 @@ paths:
             - request body is not valid JSON
             - serial is empty
             - controller_endpoint is empty
+          '413':
+            - request body exceeds the 1 MiB admin request body limit
           '404':
             - no owned device mapping exists for the requested serial
-            - the handler returns the underlying not-found error body when no database row matches
+            - UpdateOwned returns an error and the handler responds with the underlying error body as HTTP 404
         downstream:
           passthrough: false
           propagatedStatuses: Keycloak JWKS fetch failures are handled locally and not passed through directly
@@ -746,6 +767,8 @@ paths:
           $ref: '#/components/responses/NoContent'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
         '403':
           $ref: '#/components/responses/Forbidden'
         '405':

@@ -45,7 +45,14 @@ DPoP: <fresh_dpop_proof_jwt>
 - Use Keycloak login, not a custom username/password form.
 - Use Authorization Code + PKCE.
 - Generate an ES256 / P-256 DPoP key pair in the browser.
+- Preserve the same DPoP key across the OIDC authorization redirect and callback.
+- If a full-page redirect is used, store redirect-state DPoP key material only in `sessionStorage`, restore it on `/callback`, and clear it on logout, auth failure, or refresh failure.
+- Do not use `localStorage` for the DPoP private key.
+- Do not generate a different DPoP key for the token request than the key used to compute `dpop_jkt`.
 - Obtain a Keycloak access token that is DPoP-bound to the browser key.
+- Handle Keycloak DPoP nonce challenges for token, refresh, and logout requests.
+- If Keycloak returns a DPoP nonce, read the nonce, regenerate the DPoP proof with the `nonce` claim, and retry the request once.
+- Do not retry DPoP nonce challenges indefinitely.
 - Create a new DPoP proof for every CDS API call.
 - Use a fresh `jti` for every DPoP proof.
 - Set proof `htm` to the actual HTTP method.
@@ -63,6 +70,8 @@ DPoP: <fresh_dpop_proof_jwt>
 ## Library Guidance
 
 `keycloak-js` is acceptable only if the generated implementation can send DPoP proof headers during the token request, refresh request, and logout request when required by Keycloak. If that is not supported cleanly, implement the OIDC Authorization Code + PKCE flow directly using browser APIs and `fetch`, or use a small OIDC library that allows custom DPoP headers for token/refresh requests.
+
+Any OIDC library used must allow custom DPoP proof generation and nonce retry handling for token, refresh, and logout requests. If the library cannot support DPoP nonce retry behavior cleanly, implement the OIDC requests directly with browser APIs and `fetch`.
 
 The generated API client must be explicitly DPoP-aware and must create fresh DPoP proofs for token, refresh, logout when required, and CDS API requests.
 
