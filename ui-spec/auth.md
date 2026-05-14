@@ -105,6 +105,8 @@ Before token exchange on `/callback`, the app must:
 
 After callback success or failure, clear callback transaction state (`state`, `nonce`, PKCE verifier, redirect-state metadata) so it cannot be replayed.
 
+After token exchange, if an ID token is returned, validate the ID token `nonce` claim against the stored authorization transaction nonce before accepting the login session. If the nonce is missing or does not match, reject the login, clear transaction/auth state, and require a new login.
+
 The public JWK must have this form:
 
 ```json

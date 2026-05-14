@@ -46,6 +46,8 @@ DPoP: <fresh_dpop_proof_jwt>
 - Use Authorization Code + PKCE.
 - Use high-entropy OAuth `state`, `nonce`, and PKCE verifier values per login transaction.
 - Validate callback params before token exchange: require `code` and `state`, reject missing/duplicate callback params, verify `state`, and clear transaction state after success/failure.
+- After token exchange, if an ID token is returned, validate its `nonce` claim against the stored authorization transaction nonce before accepting the login session.
+- Reject login and clear transaction/auth state if the ID token `nonce` is missing or does not match.
 - Generate an ES256 / P-256 DPoP key pair in the browser.
 - Preserve the same DPoP key across the OIDC authorization redirect and callback.
 - If a full-page redirect is used, store redirect-state DPoP key material only in `sessionStorage`, restore it on `/callback`, and clear it on logout, auth failure, or refresh failure.
