@@ -86,6 +86,10 @@ The Admin UI must preserve the same DPoP key across the OIDC authorization redir
 
 Generate the DPoP key before starting the authorization request. If a full-page redirect is used, export and store the private/public JWK only in `sessionStorage` as session-scoped auth state before redirecting to Keycloak. On `/callback`, restore the same key from `sessionStorage` before exchanging the authorization code for tokens.
 
+After restoring redirect-state DPoP key material from `sessionStorage` on `/callback`, the app must immediately remove the serialized private/public JWK material from `sessionStorage` and import the private key into Web Crypto with `extractable=false` for normal authenticated runtime.
+
+The serialized DPoP private JWK must not remain in `sessionStorage` after callback key restoration. Callback processing must remove serialized DPoP private JWK material before performing token exchange or any other network request when possible. If import fails, the app must clear the serialized JWK material and restart login.
+
 The token request must use the same DPoP key whose public key thumbprint was sent as `dpop_jkt` during the authorization request.
 
 Clear the session-scoped DPoP key material on logout, auth failure, refresh failure, or when starting a new login flow.
@@ -246,7 +250,13 @@ If mock mode is implemented:
 - Do not use `dangerouslySetInnerHTML` for auth/API/UI messages.
 - Never render API or auth error payloads as HTML.
 - Escape or safely render all server-originated strings as plain text.
-- Require a production CSP that disallows inline script by default and restricts script sources to trusted origins.
+- Production deployment must define a Content Security Policy with at least:
+
+```http
+Content-Security-Policy: default-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; connect-src 'self'
+```
+
+If Keycloak is on a separate origin, `connect-src` may also include the configured Keycloak issuer origin required for OIDC discovery, token, refresh, and logout requests. Do not allow arbitrary wildcard origins.
 
 ## Backend Validation Reminder
 

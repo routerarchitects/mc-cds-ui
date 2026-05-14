@@ -51,6 +51,8 @@ DPoP: <fresh_dpop_proof_jwt>
 - Generate an ES256 / P-256 DPoP key pair in the browser.
 - Preserve the same DPoP key across the OIDC authorization redirect and callback.
 - If a full-page redirect is used, store redirect-state DPoP key material only in `sessionStorage`, restore it on `/callback`, and clear it on logout, auth failure, or refresh failure.
+- After restoring redirect-state DPoP key material from `sessionStorage`, immediately remove the serialized private/public JWK material and import the private key into Web Crypto with `extractable=false` for normal authenticated runtime.
+- Callback processing must remove serialized DPoP private JWK material before token exchange or other network requests when possible.
 - Do not use `localStorage` for the DPoP private key.
 - Do not generate a different DPoP key for the token request than the key used to compute `dpop_jkt`.
 - Obtain a Keycloak access token that is DPoP-bound to the browser key.
@@ -74,7 +76,8 @@ DPoP: <fresh_dpop_proof_jwt>
 - In `mock` mode, never call real CDS APIs; use mocked responses only. If `VITE_AUTH_MODE=mock` is used outside localhost/dev builds, fail closed.
 - Do not use `dangerouslySetInnerHTML`.
 - Never render API/auth error payloads as HTML. Render escaped text or fixed safe messages only.
-- Require production CSP with no inline script by default and trusted script sources only.
+- Production CSP must include at minimum: `default-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; connect-src 'self'`.
+- If Keycloak uses a separate origin, `connect-src` may include only the configured Keycloak issuer origin. Do not use wildcard origins.
 - Validate `controller_endpoint` as a cloud hostname only, such as `openwifi3.routerarchitects.com`, with max length 253 characters; reject port, scheme, path, query, fragment, and credentials.
 - Read config from Vite environment variables.
 - Keep code modular and easy to maintain.
