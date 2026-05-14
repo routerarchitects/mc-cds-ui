@@ -1,0 +1,282 @@
+app:
+  name: CDS Admin UI
+  description: Browser-based admin console for managing CDS device to controller endpoint mappings.
+  framework: React
+  build_tool: Vite
+  language: TypeScript
+  auth_provider: Keycloak DPoP
+  default_route: /
+  api_base_env: VITE_CDS_API_BASE_URL
+  default_api_base: same-origin
+
+routes:
+  - path: /
+    screen: DeviceDashboard
+    auth_required: true
+    description: Main device management dashboard.
+  - path: /callback
+    screen: AuthCallback
+    auth_required: false
+    description: Optional OIDC callback route if the implementation handles the authorization code on a dedicated route.
+
+navigation:
+  top_nav:
+    title: CDS Admin
+    items:
+      - label: Devices
+        path: /
+    user_menu:
+      show_username: true
+      actions:
+        - logout
+
+screens:
+  DeviceDashboard:
+    purpose: Manage device serials and controller endpoint mappings.
+    auth_required: true
+    layout:
+      type: single_page_dashboard
+      regions:
+        - app_header
+        - summary_bar
+        - device_form_panel
+        - device_table_panel
+        - toast_area
+    initial_load:
+      action: list_devices
+      loading_state: show_table_skeleton_or_spinner
+      error_state: show_retryable_error_alert
+    dashboard_summary:
+      total_devices:
+        source: current_device_list_length
+      last_refresh:
+        initial_value: Never
+        update_on_successful_list_load: true
+        update_after_successful_add_update_delete_refresh: true
+        display_format: local_time_short
+      auth_mode:
+        source: configured_auth_mode
+      dpop_status:
+        source: auth_provider_dpop_ready
+    actions:
+      - list_devices
+      - add_device
+      - edit_device
+      - update_device
+      - delete_device
+      - reset_form
+      - logout
+    empty_state:
+      title: No devices found
+      message: Add a device mapping to get started.
+    forbidden_state:
+      title: Access denied
+      message: You do not have permission to manage CDS devices.
+    unauthenticated_state:
+      behavior: Redirect to Keycloak login.
+
+forms:
+  DeviceForm:
+    purpose: Create or update a device mapping.
+    modes:
+      - create
+      - edit
+    default_mode: create
+    fields:
+      serial:
+        label: Device Serial
+        type: text
+        required: true
+        placeholder: "b4:6a:d4:45:f0:19"
+        trim: true
+        lowercase_on_submit: true
+        help_text: Device serial number, usually MAC-style.
+        validation:
+          - rule: required
+            message: Device serial is required.
+      controller_endpoint:
+        label: Controller Endpoint
+        type: text
+        required: true
+        placeholder: "openwifi3.routerarchitects.com"
+        trim: true
+        help_text: Cloud hostname only, for example openwifi3.routerarchitects.com. Do not include scheme, port, path, query, fragment, or credentials.
+        validation:
+          - rule: required
+            message: Controller endpoint is required.
+          - rule: cloud_hostname_only
+            message: Enter a hostname only, for example openwifi3.routerarchitects.com.
+          - rule: max_length
+            value: 253
+            message: Controller endpoint must be 253 characters or fewer.
+    buttons:
+      create_mode:
+        primary: Add Device
+        secondary: Reset
+      edit_mode:
+        primary: Update Device
+        secondary: Cancel Edit
+    submit_behavior:
+      create: call_add_device
+      edit: call_update_device
+    success_behavior:
+      - show_success_toast
+      - refresh_device_list
+      - reset_form_to_create_mode
+    error_behavior:
+      - show_error_alert_or_toast
+      - keep_form_values
+
+components:
+  AppHeader:
+    content:
+      - app_title
+      - authenticated_username
+      - logout_button
+
+  SummaryBar:
+    content:
+      - total_device_count
+      - last_refresh_label
+      - auth_mode_label
+      - dpop_status_label
+
+  DeviceTable:
+    purpose: Display existing devices and row actions.
+    columns:
+      - key: serial
+        label: Serial
+        sortable: true
+        searchable: true
+      - key: controller_endpoint
+        label: Controller Endpoint
+        sortable: true
+        searchable: true
+      - key: actions
+        label: Actions
+        sortable: false
+    row_actions:
+      - edit
+      - delete
+    table_actions:
+      - refresh
+    states:
+      loading: Show spinner or skeleton rows.
+      empty: Show empty state message.
+      error: Show retry button.
+
+  DeleteDeviceDialog:
+    purpose: Confirm destructive delete action.
+    trigger: DeviceTable delete action.
+    content:
+      title: Delete device?
+      message_template: "Are you sure you want to delete device {serial}? This action cannot be undone."
+    buttons:
+      primary_destructive: Delete
+      secondary: Cancel
+    success_behavior:
+      - close_dialog
+      - show_success_toast
+      - refresh_device_list
+    error_behavior:
+      - keep_dialog_open
+      - show_error_message
+
+api_bindings:
+  list_devices:
+    method: GET
+    path: /v1/device
+    auth: keycloak-dpop
+    request_body: none
+    success_status:
+      - 200
+    on_success:
+      - populate_device_table
+      - update_total_device_count
+      - update_last_refresh_timestamp
+    on_error:
+      401: redirect_or_show_session_expired
+      403: show_forbidden_state
+      default: show_retryable_error_alert
+
+  add_device:
+    method: POST
+    path: /v1/device
+    auth: keycloak-dpop
+    body:
+      serial: string
+      controller_endpoint: string
+    success_status:
+      - 201
+    on_success:
+      - show_toast: Device added successfully.
+      - refresh_device_list
+      - reset_form
+    on_error:
+      400: show_form_error
+      401: redirect_or_show_session_expired
+      403: show_forbidden_state
+      409: show_conflict_error
+      413: show_request_too_large_error
+      default: show_error_toast
+
+  update_device:
+    method: PUT
+    path: /v1/device
+    auth: keycloak-dpop
+    body:
+      serial: string
+      controller_endpoint: string
+    success_status:
+      - 204
+    on_success:
+      - show_toast: Device updated successfully.
+      - refresh_device_list
+      - reset_form_to_create_mode
+    on_error:
+      400: show_form_error
+      401: redirect_or_show_session_expired
+      403: show_forbidden_state
+      404: show_not_found_error
+      413: show_request_too_large_error
+      default: show_error_toast
+
+  delete_device:
+    method: DELETE
+    path_template: /v1/device/{serial}
+    auth: keycloak-dpop
+    path_params:
+      serial: url_encoded_string
+    request_body: none
+    confirmation_required: true
+    success_status:
+      - 204
+    on_success:
+      - show_toast: Device deleted successfully.
+      - refresh_device_list
+    on_error:
+      400: show_error_toast
+      401: redirect_or_show_session_expired
+      403: show_forbidden_state
+      404: show_not_found_error
+      default: show_error_toast
+
+client_side_behavior:
+  api_base:
+    default: same-origin
+    same_origin_paths:
+      - /v1/device
+      - /v1/device/{serial}
+    avoid_cors_by_design: true
+  token_refresh:
+    before_api_call: true
+    dpop_proof_required_for_refresh: true
+    refresh_threshold_seconds: 30
+  dpop:
+    key_algorithm: ES256
+    key_curve: P-256
+    proof_per_request: true
+    fresh_jti_per_request: true
+    resource_headers:
+      authorization_scheme: DPoP
+      proof_header: DPoP
