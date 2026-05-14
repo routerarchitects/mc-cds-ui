@@ -8,8 +8,8 @@
 4. The Admin UI uses Authorization Code Flow with PKCE S256.
 5. OAuth login transaction uses high-entropy `state`, `nonce`, and PKCE verifier values.
 6. Callback processing verifies `state` before token exchange.
-7. If an ID token is returned, the app validates the ID token `nonce` claim against the stored authorization transaction nonce before accepting the login session.
-8. If the ID token `nonce` is missing or does not match, the app rejects login, clears transaction/auth state, and requires a new login.
+7. The token response includes an ID token, and the app validates the ID token `nonce` claim against the stored authorization transaction nonce before accepting the login session.
+8. If the ID token is missing, or the ID token `nonce` is missing or does not match, the app rejects login, clears transaction/auth state, and requires a new login.
 9. Callback processing rejects missing required callback params (`code`, `state`).
 10. Callback processing rejects duplicate callback params.
 11. Callback transaction state is cleared after callback success or failure.
