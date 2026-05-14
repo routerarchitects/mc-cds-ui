@@ -67,12 +67,15 @@ Responsibilities:
 - Generate PKCE verifier/challenge for login.
 - Redirect unauthenticated users to Keycloak when auth mode is `keycloak-dpop`.
 - Handle the authorization callback and exchange code for DPoP-bound tokens.
+- Validate OAuth callback transaction state (`state`, `nonce`, PKCE verifier) before token exchange and clear transaction state after success/failure.
 - Refresh tokens before API calls when near expiry, using a DPoP proof for the refresh token request.
 - Expose current user details from the parsed token when available.
 - Expose `getAccessToken()` for the API client.
 - Expose `getDpopProof(method, url, accessToken)` or an equivalent helper for the API client.
 - Expose `logout()`.
 - Optionally support mock auth mode for UI-only development.
+- In mock mode, serve mocked auth/API behavior only; never call real CDS APIs.
+- Fail closed if mock mode is enabled outside localhost/dev builds.
 
 Suggested interface:
 
@@ -128,6 +131,7 @@ Implementation requirements:
 - Use base64url encoding without padding.
 - Use header `typ: "dpop+jwt"`, `alg: "ES256"`, and the public JWK.
 - Generate a new `crypto.randomUUID()` or equivalent random `jti` for every proof.
+- Compute JWK thumbprint using RFC7638 canonicalization over public fields only (`crv`, `kty`, `x`, `y`).
 - Use Unix seconds for `iat`.
 - Include `ath` for CDS resource requests.
 - Do not include query string or fragment in `htu`.
@@ -235,6 +239,8 @@ Validation:
 
 - Do not submit if `serial` is empty.
 - Do not submit if `controller_endpoint` is empty.
+- `controller_endpoint` must be at most 253 characters and must be a cloud hostname only, such as `openwifi3.routerarchitects.com`.
+- Reject `controller_endpoint` values with port, scheme, path, query, fragment, or credentials.
 - Show inline validation messages.
 
 Buttons:
@@ -318,6 +324,8 @@ Responsibilities:
 - Parse JSON for GET/POST responses.
 - Correctly handle 204 responses with no body.
 - Convert HTTP errors into useful UI errors.
+- Map backend/API failures to fixed safe user messages or escaped plain text only.
+- Never render raw API error payloads as HTML.
 
 Required functions:
 
@@ -365,3 +373,4 @@ Handle these cases:
 - Network/TLS failures.
 
 Do not log raw tokens or DPoP proofs.
+Do not use `dangerouslySetInnerHTML` for API/auth error rendering.

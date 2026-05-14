@@ -44,6 +44,8 @@ DPoP: <fresh_dpop_proof_jwt>
 - `Last refresh` starts as `Never` and updates after every successful device list load, including manual refresh and refreshes after add/update/delete.
 - Use Keycloak login, not a custom username/password form.
 - Use Authorization Code + PKCE.
+- Use high-entropy OAuth `state`, `nonce`, and PKCE verifier values per login transaction.
+- Validate callback params before token exchange: require `code` and `state`, reject missing/duplicate callback params, verify `state`, and clear transaction state after success/failure.
 - Generate an ES256 / P-256 DPoP key pair in the browser.
 - Preserve the same DPoP key across the OIDC authorization redirect and callback.
 - If a full-page redirect is used, store redirect-state DPoP key material only in `sessionStorage`, restore it on `/callback`, and clear it on logout, auth failure, or refresh failure.
@@ -53,6 +55,7 @@ DPoP: <fresh_dpop_proof_jwt>
 - Handle Keycloak DPoP nonce challenges for token, refresh, and logout requests.
 - If Keycloak returns a DPoP nonce, read the nonce, regenerate the DPoP proof with the `nonce` claim, and retry the request once.
 - Do not retry DPoP nonce challenges indefinitely.
+- Compute DPoP JWK thumbprints using RFC7638 canonicalization over public JWK fields only: `crv`, `kty`, `x`, `y`.
 - Create a new DPoP proof for every CDS API call.
 - Use a fresh `jti` for every DPoP proof.
 - Set proof `htm` to the actual HTTP method.
@@ -64,6 +67,13 @@ DPoP: <fresh_dpop_proof_jwt>
 - Handle loading, empty list, success, error, 401, 403, 404, 409, 413, 500, and network failures.
 - Add logout support.
 - Do not store or use any Keycloak client secret in frontend code.
+- Keep access/refresh tokens in memory by default; use `sessionStorage` only for strictly necessary session-scoped redirect/auth state.
+- Validate post-login/post-logout return paths against a same-origin allowlist. Allow only relative paths such as `/` or `/callback`. Reject absolute URLs, protocol-relative URLs, and paths containing control characters.
+- In `mock` mode, never call real CDS APIs; use mocked responses only. If `VITE_AUTH_MODE=mock` is used outside localhost/dev builds, fail closed.
+- Do not use `dangerouslySetInnerHTML`.
+- Never render API/auth error payloads as HTML. Render escaped text or fixed safe messages only.
+- Require production CSP with no inline script by default and trusted script sources only.
+- Validate `controller_endpoint` as a cloud hostname only, such as `openwifi3.routerarchitects.com`, with max length 253 characters; reject port, scheme, path, query, fragment, and credentials.
 - Read config from Vite environment variables.
 - Keep code modular and easy to maintain.
 

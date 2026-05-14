@@ -92,6 +92,19 @@ Clear the session-scoped DPoP key material on logout, auth failure, refresh fail
 
 Do not store the DPoP private key in `localStorage`. Do not persist DPoP private key material beyond the browser session.
 
+## OAuth Callback Validation
+
+The authorization transaction must use cryptographically random `state`, `nonce`, and PKCE verifier values with at least 128 bits of entropy.
+
+Before token exchange on `/callback`, the app must:
+
+- verify callback `state` matches the stored transaction `state`
+- verify required callback params are present (`code`, `state`), reject missing params
+- reject duplicate callback params
+- use the original stored PKCE verifier for the code exchange
+
+After callback success or failure, clear callback transaction state (`state`, `nonce`, PKCE verifier, redirect-state metadata) so it cannot be replayed.
+
 The public JWK must have this form:
 
 ```json
@@ -102,6 +115,8 @@ The public JWK must have this form:
   "y": "..."
 }
 ```
+
+DPoP JWK thumbprint computation must use RFC7638 canonicalization over public JWK fields only: `crv`, `kty`, `x`, `y`. Do not include private fields or non-thumbprint members.
 
 ## DPoP Proof Header
 
@@ -175,6 +190,14 @@ Nonce handling applies to:
 - refresh token requests
 - logout/end-session requests when Keycloak requires DPoP
 
+## Token Storage and Redirect Rules
+
+- Access and refresh tokens must be memory-only by default.
+- `sessionStorage` may be used only for strictly necessary session-scoped redirect/auth transaction state.
+- Post-login and post-logout return paths must be validated against a same-origin allowlist.
+- Allow only relative return paths such as `/` or `/callback`.
+- Reject absolute URLs, protocol-relative URLs, and paths containing control characters.
+
 ## Token Refresh
 
 If refresh tokens are used, refresh requests for a DPoP-bound public client must also include a fresh DPoP proof signed with the same DPoP private key.
@@ -213,6 +236,15 @@ If mock mode is implemented:
 - Do not enable mock mode by default in production builds.
 - Do not treat mock auth as secure.
 - Mock mode may bypass real DPoP only for offline UI development; real API integration must use Keycloak DPoP.
+- Mock mode must never call real CDS APIs; it must use mocked API responses only.
+- If `VITE_AUTH_MODE=mock` is used outside localhost/dev builds, the app must fail closed and refuse startup.
+
+## Frontend XSS and Content Security Requirements
+
+- Do not use `dangerouslySetInnerHTML` for auth/API/UI messages.
+- Never render API or auth error payloads as HTML.
+- Escape or safely render all server-originated strings as plain text.
+- Require a production CSP that disallows inline script by default and restricts script sources to trusted origins.
 
 ## Backend Validation Reminder
 
