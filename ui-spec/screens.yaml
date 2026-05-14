@@ -100,10 +100,15 @@ forms:
         required: true
         placeholder: "openwifi3.routerarchitects.com"
         trim: true
-        help_text: Hostname or URL of the controller endpoint.
+        help_text: Cloud hostname only, for example openwifi3.routerarchitects.com. Do not include scheme, port, path, query, fragment, or credentials.
         validation:
           - rule: required
             message: Controller endpoint is required.
+          - rule: cloud_hostname_only
+            message: Enter a hostname only, for example openwifi3.routerarchitects.com.
+          - rule: max_length
+            value: 253
+            message: Controller endpoint must be 253 characters or fewer.
     buttons:
       create_mode:
         primary: Add Device
