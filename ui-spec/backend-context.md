@@ -123,7 +123,7 @@ The frontend obtains the token and generates proofs. The backend remains the sec
 ## DPoP URL Rule
 
 For CDS API calls, the `htu` claim must equal the externally visible request URL without query string or fragment.
-For `DELETE /v1/device/{serial}`, the exact same normalized path string must be used for both the DPoP `htu` proof input and the actual fetch request URL.
+For `DELETE /v1/device/{serial}`, build one normalized delete path, resolve it against the configured API origin or current origin to produce the exact browser request URL, and use that same absolute external URL without query string or fragment as the DPoP `htu` input and fetch DELETE URL.
 Add/update/delete must validate serial before sending any API request.
 
 If the browser calls:
