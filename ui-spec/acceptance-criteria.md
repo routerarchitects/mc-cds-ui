@@ -56,11 +56,11 @@
 49. Update device uses `PUT /v1/device` with JSON body.
 50. Delete device uses `DELETE /v1/device/{serial}` with no JSON body.
 51. Serial is normalized with `trim().toLowerCase()`.
-52. Serial validation uses pattern `^[0-9a-f]{2}(:[0-9a-f]{2}){5}$`.
+52. Serial is non-empty after trim.
 53. Serial input accepts `aa:bb:cc:dd:ee:ff`.
-54. Serial input rejects values containing `/`, `?`, `#`, `%`, whitespace, control characters, or non-hex/non-colon characters.
+54. Serial input rejects values containing `/`, `?`, `#`, `%`, whitespace, or control characters.
 55. Add/update/delete do not send API requests when serial validation fails.
-56. Delete path preserves `:` characters for valid MAC-style serials, for example `/v1/device/aa:bb:cc:dd:ee:ff`.
+56. Delete path preserves `:` characters when present, for example `/v1/device/aa:bb:cc:dd:ee:ff`.
 57. The normalized delete path is resolved to the exact browser request URL, and that same absolute external URL (without query/fragment) is used for both DPoP proof `htu` generation and the fetch DELETE request.
 58. Delete with a valid MAC-style serial does not fail with `dpop_htu_mismatch` when auth/session are valid.
 59. API base URL defaults to same-origin when `VITE_CDS_API_BASE_URL` is empty.

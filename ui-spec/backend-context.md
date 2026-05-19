@@ -83,9 +83,9 @@ DELETE /v1/device/b4:6a:d4:45:f0:19
 ```
 
 For delete path construction, the UI must normalize serial with `trim().toLowerCase()` and preserve MAC-style `:` characters in the path segment.
-The normalized serial must match `^[0-9a-f]{2}(:[0-9a-f]{2}){5}$`.
-Valid example: `aa:bb:cc:dd:ee:ff`.
-The UI must reject serials containing `/`, `?`, `#`, `%`, whitespace, control characters, or any character outside lowercase hex digits and colon.
+The normalized serial must be non-empty after trim.
+The UI must reject serials containing `/`, `?`, `#`, `%`, whitespace, or control characters.
+MAC-style serials such as `aa:bb:cc:dd:ee:ff` are supported examples, not the only allowed format.
 Build delete path as `/v1/device/${normalizedSerial}`.
 
 ## Current Authentication Behavior
