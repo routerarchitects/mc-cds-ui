@@ -68,10 +68,10 @@ DPoP: <fresh_dpop_proof_jwt>
 - Send `Authorization: DPoP <access_token>` and `DPoP: <proof>` for every Admin API request.
 - Use same-origin API calls by default: `/v1/device` and `/v1/device/{serial}`.
 - Normalize serial with `trim().toLowerCase()`.
-- Validate serial is non-empty after trim.
-- Validate serial with path-safe pattern `^[a-z0-9:._-]+$`.
-- Reject serial values containing `/`, `?`, `#`, `%`, whitespace, or control characters.
-- MAC-style serials such as `aa:bb:cc:dd:ee:ff` are supported examples, not the only allowed format.
+- Validate serial with `^[0-9a-f]{2}(:[0-9a-f]{2}){5}$`.
+- This validation applies before `POST`, `PUT`, and `DELETE` requests.
+- Valid example: `aa:bb:cc:dd:ee:ff`.
+- Reject `aa/bb`, `aa?x=1`, `aa#x`, `aa%2fbb`, `aa bb`, `device-001`, `serial123`, `abc_def`.
 - For `DELETE /v1/device/{serial}`, normalize serial with `trim().toLowerCase()` and preserve MAC-style `:` in the path segment.
 - Build delete path as `/v1/device/${normalizedSerial}` while preserving MAC-style colon characters.
 - Resolve the normalized delete path against the configured API origin or current origin to create the exact browser request URL.

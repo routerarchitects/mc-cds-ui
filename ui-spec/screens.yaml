@@ -90,21 +90,16 @@ forms:
         placeholder: "b4:6a:d4:45:f0:19"
         trim: true
         lowercase_on_submit: true
-        format: path_safe_serial
-        pattern: "^[a-z0-9:._-]+$"
+        format: mac_style_serial
+        pattern: "^[0-9a-f]{2}(:[0-9a-f]{2}){5}$"
         valid_examples:
           - "aa:bb:cc:dd:ee:ff"
-          - "router-001"
         help_text: Device serial number, usually MAC-style.
         validation:
           - rule: required
             message: Device serial is required.
-          - rule: non_empty_after_trim
-            message: Device serial is required.
-          - rule: path_safe_serial_pattern
-            message: Serial may contain only lowercase letters, digits, ':', '.', '_', and '-'.
-          - rule: reject_path_significant_characters
-            message: Serial cannot include '/', '?', '#', '%', whitespace, or control characters.
+          - rule: mac_style_serial_pattern
+            message: Enter a MAC-style serial like aa:bb:cc:dd:ee:ff.
       controller_endpoint:
         label: Controller Endpoint
         type: text
@@ -131,7 +126,7 @@ forms:
       create: call_add_device
       edit: call_update_device
       preconditions:
-        - validate_serial_before_request
+        - validate_mac_serial_before_request
     success_behavior:
       - show_success_toast
       - refresh_device_list
@@ -259,10 +254,10 @@ api_bindings:
     path_template: /v1/device/{serial}
     auth: keycloak-dpop
     path_params:
-      serial: normalized_path_safe_serial_preserve_colons
+      serial: normalized_mac_serial_preserve_colons
     path_rules:
       - normalize_with_trim_and_lowercase
-      - validate_serial_non_empty_and_path_safe_before_request
+      - validate_mac_serial_before_request
       - preserve_colon_character_in_path_segment
       - preserve_colons_for_delete_serial
       - use_exact_same_path_for_dpop_htu_and_fetch_request

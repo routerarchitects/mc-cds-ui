@@ -83,10 +83,9 @@ DELETE /v1/device/b4:6a:d4:45:f0:19
 ```
 
 For delete path construction, the UI must normalize serial with `trim().toLowerCase()` and preserve MAC-style `:` characters in the path segment.
-The normalized serial must be non-empty after trim.
-The normalized serial must match `^[a-z0-9:._-]+$`.
-The UI must reject serials containing `/`, `?`, `#`, `%`, whitespace, or control characters.
-MAC-style serials such as `aa:bb:cc:dd:ee:ff` are supported examples, not the only allowed format.
+The normalized serial must match `^[0-9a-f]{2}(:[0-9a-f]{2}){5}$`.
+Valid example: `aa:bb:cc:dd:ee:ff`.
+The UI must reject invalid serials such as `aa/bb`, `aa?x=1`, `aa#x`, `aa%2fbb`, `aa bb`, `device-001`, `serial123`, `abc_def`.
 Build delete path as `/v1/device/${normalizedSerial}`.
 
 ## Current Authentication Behavior
@@ -124,7 +123,7 @@ The frontend obtains the token and generates proofs. The backend remains the sec
 
 For CDS API calls, the `htu` claim must equal the externally visible request URL without query string or fragment.
 For `DELETE /v1/device/{serial}`, build one normalized delete path, resolve it against the configured API origin or current origin to produce the exact browser request URL, and use that same absolute external URL without query string or fragment as the DPoP `htu` input and fetch DELETE URL.
-Add/update/delete must validate serial before sending any API request.
+Add/update/delete must validate serial with `^[0-9a-f]{2}(:[0-9a-f]{2}){5}$` before sending any API request.
 
 If the browser calls:
 

@@ -229,10 +229,9 @@ Fields:
   - text input
   - trim whitespace
   - lower-case on submit
-  - must be non-empty after trim
-  - must match path-safe serial pattern: `^[a-z0-9:._-]+$`
-  - reject slash `/`, question mark `?`, hash `#`, percent `%`, whitespace, and control characters
-  - MAC-style serials are supported examples, not the only allowed format
+  - must match `^[0-9a-f]{2}(:[0-9a-f]{2}){5}$`
+  - valid example: `aa:bb:cc:dd:ee:ff`
+  - reject invalid serials such as `aa/bb`, `aa?x=1`, `aa#x`, `aa%2fbb`, `aa bb`, `device-001`, `serial123`, `abc_def`
   - disable editing of serial in edit mode unless the implementation has a clear reason not to
 - `controller_endpoint`
   - required
@@ -243,14 +242,14 @@ Validation:
 
 - Do not submit if `serial` is empty.
 - Normalize serial with `trim().toLowerCase()` before validation.
-- `serial` must be non-empty after trim.
-- `serial` must match `^[a-z0-9:._-]+$`.
-- Reject `serial` values containing `/`, `?`, `#`, `%`, whitespace, or control characters.
+- `serial` must match `^[0-9a-f]{2}(:[0-9a-f]{2}){5}$`.
+- Reject invalid serials such as `aa/bb`, `aa?x=1`, `aa#x`, `aa%2fbb`, `aa bb`, `device-001`, `serial123`, `abc_def`.
 - Do not submit if `controller_endpoint` is empty.
 - `controller_endpoint` must be at most 253 characters and must be a cloud hostname only, such as `openwifi3.routerarchitects.com`.
 - Reject `controller_endpoint` values with port, scheme, path, query, fragment, or credentials.
 - Show inline validation messages.
 - Add/update/delete must validate serial before sending any API request.
+- Invalid serial must show a clear inline/safe error and block the API call.
 
 Buttons:
 
@@ -330,6 +329,7 @@ Responsibilities:
 - Send `DPoP: <proof>`.
 - Send `Content-Type: application/json` for POST/PUT.
 - Do not send a JSON body for DELETE `/v1/device/{serial}`.
+- Validate serial with `^[0-9a-f]{2}(:[0-9a-f]{2}){5}$` before `POST`, `PUT`, and `DELETE` requests.
 - Parse JSON for GET/POST responses.
 - For `GET /v1/device`, parse JSON when a response body is present.
 - For `GET /v1/device`, if response JSON is an array, use it.
@@ -363,8 +363,7 @@ DELETE /v1/device/{normalizedSerial}
 Delete path rule:
 
 - Normalize delete serial using `trim().toLowerCase()`.
-- Validate normalized serial is non-empty and path-safe before sending DELETE.
-- Path-safe serial means matching `^[a-z0-9:._-]+$`.
+- Validate normalized serial with `^[0-9a-f]{2}(:[0-9a-f]{2}){5}$` before sending DELETE.
 - Preserve MAC-style `:` characters in the DELETE path segment.
 - Build normalized delete path as `/v1/device/${normalizedSerial}`.
 - Resolve that path against the configured API origin or current origin to produce the exact browser request URL.
