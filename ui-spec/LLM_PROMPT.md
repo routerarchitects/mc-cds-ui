@@ -73,9 +73,11 @@ DPoP: <fresh_dpop_proof_jwt>
 - Reject serial values containing `/`, `?`, `#`, `%`, whitespace, control characters, or any character outside lowercase hex digits and colon.
 - For `DELETE /v1/device/{serial}`, normalize serial with `trim().toLowerCase()` and preserve MAC-style `:` in the path segment.
 - Build delete path as `/v1/device/${normalizedSerial}` while preserving MAC-style colon characters.
-- Use the exact same URL/path string for DPoP `htu` proof generation and the fetch DELETE request.
+- Resolve the normalized delete path against the configured API origin or current origin to create the exact browser request URL.
+- Use that same absolute external URL, without query or fragment, for both DPoP `htu` proof generation and the fetch DELETE request.
 - Validate serial before add/update/delete requests. If invalid, show a clear inline validation message and do not send the API request.
-- For `GET /v1/device`, if JSON response is an array, use it; if `null` or `undefined`, treat it as `[]`.
+- For `GET /v1/device`, parse JSON when a response body is present. If JSON response is an array, use it; if `null` or `undefined`, treat it as `[]`.
+- For `GET /v1/device`, if a successful response has an empty body, treat it as `[]` for compatibility.
 - For `GET /v1/device`, if JSON response shape is neither array nor nullish, raise/show a fixed safe error such as `Unexpected response from server.`.
 - Keep device-list state array-safe so filter/sort/map/spread/render logic only operates on arrays.
 - Do not add CORS workarounds in the frontend.
