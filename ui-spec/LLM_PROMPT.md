@@ -124,5 +124,17 @@ Include:
 - CSS styling
 - `.env.example`
 - README with setup, build, and integration instructions
+- Unit tests and/or integration tests that cover:
+  - OAuth state/nonce/PKCE callback validation
+  - DPoP key lifecycle and proof claims (`htm`, `htu`, `iat`, `ath`, fresh `jti`)
+  - memory-only token storage expectations
+  - CRUD API client request and error handling behavior
+  - serial and controller endpoint validation behavior
+  - device list array/null/invalid/empty-body compatibility handling
+  - add/update/delete UI flows
+  - safe escaped rendering of API/auth/server-driven messages
+  - mock mode safety (never calling real CDS APIs)
+  - config validation behavior
+- Verification steps showing successful production build with `npm run build`
 
 Do not modify the CDS backend unless explicitly asked. Generate only the Admin UI frontend.

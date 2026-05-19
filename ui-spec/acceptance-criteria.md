@@ -159,3 +159,18 @@
 134. The app never renders API/auth error payloads as HTML.
 135. Production CSP includes at minimum `default-src 'self'`, `script-src 'self'`, `object-src 'none'`, `base-uri 'self'`, `frame-ancestors 'none'`, and `connect-src 'self'`.
 136. If Keycloak is on a separate origin, CSP `connect-src` allows only the configured Keycloak issuer origin in addition to `'self'`; it does not use wildcard origins.
+
+## Testing Requirements
+
+137. The generated UI includes automated unit tests and/or integration tests for auth, API client behavior, validation, UI flows, safety, and mock mode.
+138. Tests cover OAuth callback validation for `state`, `nonce`, and PKCE transaction integrity checks.
+139. Tests cover DPoP key lifecycle across login/callback/logout flows and DPoP proof claim correctness (`htm`, `htu`, `iat`, `ath`, fresh `jti`).
+140. Tests verify tokens remain memory-only by default and are not persisted to long-lived `localStorage`.
+141. Tests cover CRUD API client calls, request construction, and mapped error handling across expected status classes.
+142. Tests cover serial and controller endpoint validation behavior, including request blocking on invalid input.
+143. Tests cover device list handling for array responses, `null`/`undefined`, invalid shapes, and compatibility handling of successful empty response body.
+144. Tests cover add/update/delete UI flows, including success refresh behavior and failure messaging.
+145. Tests verify safe escaped rendering behavior for API/auth/server-provided messages and no HTML injection rendering.
+146. Tests verify mock mode never calls real CDS APIs.
+147. Tests include config validation behavior for required/invalid environment configurations.
+148. CI/local verification includes successful production build with `npm run build`.
