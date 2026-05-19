@@ -230,6 +230,7 @@ Fields:
   - trim whitespace
   - lower-case on submit
   - must be non-empty after trim
+  - must match path-safe serial pattern: `^[a-z0-9:._-]+$`
   - reject slash `/`, question mark `?`, hash `#`, percent `%`, whitespace, and control characters
   - MAC-style serials are supported examples, not the only allowed format
   - disable editing of serial in edit mode unless the implementation has a clear reason not to
@@ -243,6 +244,7 @@ Validation:
 - Do not submit if `serial` is empty.
 - Normalize serial with `trim().toLowerCase()` before validation.
 - `serial` must be non-empty after trim.
+- `serial` must match `^[a-z0-9:._-]+$`.
 - Reject `serial` values containing `/`, `?`, `#`, `%`, whitespace, or control characters.
 - Do not submit if `controller_endpoint` is empty.
 - `controller_endpoint` must be at most 253 characters and must be a cloud hostname only, such as `openwifi3.routerarchitects.com`.
@@ -362,6 +364,7 @@ Delete path rule:
 
 - Normalize delete serial using `trim().toLowerCase()`.
 - Validate normalized serial is non-empty and path-safe before sending DELETE.
+- Path-safe serial means matching `^[a-z0-9:._-]+$`.
 - Preserve MAC-style `:` characters in the DELETE path segment.
 - Build normalized delete path as `/v1/device/${normalizedSerial}`.
 - Resolve that path against the configured API origin or current origin to produce the exact browser request URL.

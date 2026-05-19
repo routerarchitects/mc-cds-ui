@@ -69,6 +69,7 @@ DPoP: <fresh_dpop_proof_jwt>
 - Use same-origin API calls by default: `/v1/device` and `/v1/device/{serial}`.
 - Normalize serial with `trim().toLowerCase()`.
 - Validate serial is non-empty after trim.
+- Validate serial with path-safe pattern `^[a-z0-9:._-]+$`.
 - Reject serial values containing `/`, `?`, `#`, `%`, whitespace, or control characters.
 - MAC-style serials such as `aa:bb:cc:dd:ee:ff` are supported examples, not the only allowed format.
 - For `DELETE /v1/device/{serial}`, normalize serial with `trim().toLowerCase()` and preserve MAC-style `:` in the path segment.

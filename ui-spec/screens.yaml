@@ -91,6 +91,7 @@ forms:
         trim: true
         lowercase_on_submit: true
         format: path_safe_serial
+        pattern: "^[a-z0-9:._-]+$"
         valid_examples:
           - "aa:bb:cc:dd:ee:ff"
           - "router-001"
@@ -100,6 +101,8 @@ forms:
             message: Device serial is required.
           - rule: non_empty_after_trim
             message: Device serial is required.
+          - rule: path_safe_serial_pattern
+            message: Serial may contain only lowercase letters, digits, ':', '.', '_', and '-'.
           - rule: reject_path_significant_characters
             message: Serial cannot include '/', '?', '#', '%', whitespace, or control characters.
       controller_endpoint:
