@@ -79,10 +79,11 @@ Create/update request body:
 Delete request uses the path parameter, not a JSON body:
 
 ```text
-DELETE /v1/device/b4%3A6a%3Ad4%3A45%3Af0%3A19
+DELETE /v1/device/b4:6a:d4:45:f0:19
 ```
 
-The UI must URL-encode the serial when building the delete URL.
+For delete path construction, the UI must normalize serial with `trim().toLowerCase()` and preserve MAC-style `:` characters in the path segment.
+Build delete path as `/v1/device/${normalizedSerial}`.
 
 ## Current Authentication Behavior
 
@@ -118,6 +119,7 @@ The frontend obtains the token and generates proofs. The backend remains the sec
 ## DPoP URL Rule
 
 For CDS API calls, the `htu` claim must equal the externally visible request URL without query string or fragment.
+For `DELETE /v1/device/{serial}`, the exact same normalized path string must be used for both the DPoP `htu` proof input and the actual fetch request URL.
 
 If the browser calls:
 

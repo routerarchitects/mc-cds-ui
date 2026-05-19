@@ -67,6 +67,12 @@ DPoP: <fresh_dpop_proof_jwt>
 - Include `ath` as base64url(SHA-256(access_token)) for CDS resource requests.
 - Send `Authorization: DPoP <access_token>` and `DPoP: <proof>` for every Admin API request.
 - Use same-origin API calls by default: `/v1/device` and `/v1/device/{serial}`.
+- For `DELETE /v1/device/{serial}`, normalize serial with `trim().toLowerCase()` and preserve MAC-style `:` in the path segment.
+- Build delete path as `/v1/device/${normalizedSerial}` while preserving MAC-style colon characters.
+- Use the exact same URL/path string for DPoP `htu` proof generation and the fetch DELETE request.
+- For `GET /v1/device`, if JSON response is an array, use it; if `null` or `undefined`, treat it as `[]`.
+- For `GET /v1/device`, if JSON response shape is neither array nor nullish, raise/show a fixed safe error such as `Unexpected response from server.`.
+- Keep device-list state array-safe so filter/sort/map/spread/render logic only operates on arrays.
 - Do not add CORS workarounds in the frontend.
 - Handle loading, empty list, success, error, 401, 403, 404, 409, 413, 500, and network failures.
 - Add logout support.

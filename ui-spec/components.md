@@ -322,6 +322,10 @@ Responsibilities:
 - Send `Content-Type: application/json` for POST/PUT.
 - Do not send a JSON body for DELETE `/v1/device/{serial}`.
 - Parse JSON for GET/POST responses.
+- For `GET /v1/device`, if response JSON is an array, use it.
+- For `GET /v1/device`, if response JSON is `null` or `undefined`, treat it as `[]`.
+- For `GET /v1/device`, if response JSON is any other shape, throw/show a fixed safe error such as `Unexpected response from server.`.
+- Keep device-list state array-safe; filtering, sorting, mapping, spreading, and rendering must operate on arrays only.
 - Correctly handle 204 responses with no body.
 - Convert HTTP errors into useful UI errors.
 - Map backend/API failures to fixed safe user messages or escaped plain text only.
@@ -342,8 +346,16 @@ Expected request paths:
 GET    /v1/device
 POST   /v1/device
 PUT    /v1/device
-DELETE /v1/device/{encodeURIComponent(serial)}
+DELETE /v1/device/{normalizedSerial}
 ```
+
+Delete path rule:
+
+- Normalize delete serial using `trim().toLowerCase()`.
+- Preserve MAC-style `:` characters in the DELETE path segment.
+- Build delete path as `/v1/device/${normalizedSerial}`.
+- Use the exact same URL/path string for both DPoP `htu` proof generation and the fetch DELETE request.
+- Rationale: backend DPoP validation compares `htu` against `r.URL.Path` exactly, so the UI must preserve the same normalized path string for proof generation and fetch.
 
 ## Types
 

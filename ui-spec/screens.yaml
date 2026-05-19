@@ -246,7 +246,14 @@ api_bindings:
     path_template: /v1/device/{serial}
     auth: keycloak-dpop
     path_params:
-      serial: url_encoded_string
+      serial: normalized_mac_serial_preserve_colons
+    path_rules:
+      - normalize_with_trim_and_lowercase
+      - preserve_colon_character_in_path_segment
+      - preserve_mac_colons_for_delete_serial
+      - use_exact_same_path_for_dpop_htu_and_fetch_request
+    notes:
+      - Preserve ':' in the DELETE path segment for DPoP htu parity with backend r.URL.Path comparison.
     request_body: none
     confirmation_required: true
     success_status:
