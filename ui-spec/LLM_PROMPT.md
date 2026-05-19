@@ -67,9 +67,14 @@ DPoP: <fresh_dpop_proof_jwt>
 - Include `ath` as base64url(SHA-256(access_token)) for CDS resource requests.
 - Send `Authorization: DPoP <access_token>` and `DPoP: <proof>` for every Admin API request.
 - Use same-origin API calls by default: `/v1/device` and `/v1/device/{serial}`.
+- Normalize serial with `trim().toLowerCase()`.
+- Validate serial with MAC-style pattern `^[0-9a-f]{2}(:[0-9a-f]{2}){5}$`.
+- Accept valid serial example: `aa:bb:cc:dd:ee:ff`.
+- Reject serial values containing `/`, `?`, `#`, `%`, whitespace, control characters, or any character outside lowercase hex digits and colon.
 - For `DELETE /v1/device/{serial}`, normalize serial with `trim().toLowerCase()` and preserve MAC-style `:` in the path segment.
 - Build delete path as `/v1/device/${normalizedSerial}` while preserving MAC-style colon characters.
 - Use the exact same URL/path string for DPoP `htu` proof generation and the fetch DELETE request.
+- Validate serial before add/update/delete requests. If invalid, show a clear inline validation message and do not send the API request.
 - For `GET /v1/device`, if JSON response is an array, use it; if `null` or `undefined`, treat it as `[]`.
 - For `GET /v1/device`, if JSON response shape is neither array nor nullish, raise/show a fixed safe error such as `Unexpected response from server.`.
 - Keep device-list state array-safe so filter/sort/map/spread/render logic only operates on arrays.

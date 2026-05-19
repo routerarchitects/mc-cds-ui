@@ -90,10 +90,17 @@ forms:
         placeholder: "b4:6a:d4:45:f0:19"
         trim: true
         lowercase_on_submit: true
+        format: mac_style
+        pattern: "^[0-9a-f]{2}(:[0-9a-f]{2}){5}$"
+        valid_example: "aa:bb:cc:dd:ee:ff"
         help_text: Device serial number, usually MAC-style.
         validation:
           - rule: required
             message: Device serial is required.
+          - rule: normalized_mac_serial
+            message: Enter a MAC-style serial like aa:bb:cc:dd:ee:ff.
+          - rule: reject_path_significant_characters
+            message: Serial cannot include '/', '?', '#', '%', whitespace, control characters, or non-hex/non-colon characters.
       controller_endpoint:
         label: Controller Endpoint
         type: text
@@ -119,6 +126,8 @@ forms:
     submit_behavior:
       create: call_add_device
       edit: call_update_device
+      preconditions:
+        - validate_serial_before_request
     success_behavior:
       - show_success_toast
       - refresh_device_list
@@ -249,11 +258,13 @@ api_bindings:
       serial: normalized_mac_serial_preserve_colons
     path_rules:
       - normalize_with_trim_and_lowercase
+      - validate_serial_matches_mac_pattern_before_request
       - preserve_colon_character_in_path_segment
       - preserve_mac_colons_for_delete_serial
       - use_exact_same_path_for_dpop_htu_and_fetch_request
     notes:
       - Preserve ':' in the DELETE path segment for DPoP htu parity with backend r.URL.Path comparison.
+      - Reject invalid serial values before sending DELETE.
     request_body: none
     confirmation_required: true
     success_status:

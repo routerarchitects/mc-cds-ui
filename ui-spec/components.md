@@ -229,6 +229,9 @@ Fields:
   - text input
   - trim whitespace
   - lower-case on submit
+  - must match MAC-style format: `^[0-9a-f]{2}(:[0-9a-f]{2}){5}$`
+  - valid example: `aa:bb:cc:dd:ee:ff`
+  - reject slash `/`, question mark `?`, hash `#`, percent `%`, whitespace, control characters, and any character outside lowercase hex digits and colon
   - disable editing of serial in edit mode unless the implementation has a clear reason not to
 - `controller_endpoint`
   - required
@@ -238,10 +241,14 @@ Fields:
 Validation:
 
 - Do not submit if `serial` is empty.
+- Normalize serial with `trim().toLowerCase()` before validation.
+- `serial` must match `^[0-9a-f]{2}(:[0-9a-f]{2}){5}$`.
+- Reject `serial` values containing `/`, `?`, `#`, `%`, whitespace, control characters, or non-hex/non-colon characters.
 - Do not submit if `controller_endpoint` is empty.
 - `controller_endpoint` must be at most 253 characters and must be a cloud hostname only, such as `openwifi3.routerarchitects.com`.
 - Reject `controller_endpoint` values with port, scheme, path, query, fragment, or credentials.
 - Show inline validation messages.
+- Add/update/delete must validate serial before sending any API request.
 
 Buttons:
 
@@ -352,6 +359,7 @@ DELETE /v1/device/{normalizedSerial}
 Delete path rule:
 
 - Normalize delete serial using `trim().toLowerCase()`.
+- Validate normalized serial with `^[0-9a-f]{2}(:[0-9a-f]{2}){5}$` before sending DELETE.
 - Preserve MAC-style `:` characters in the DELETE path segment.
 - Build delete path as `/v1/device/${normalizedSerial}`.
 - Use the exact same URL/path string for both DPoP `htu` proof generation and the fetch DELETE request.
