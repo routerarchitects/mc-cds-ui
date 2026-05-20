@@ -90,10 +90,16 @@ forms:
         placeholder: "b4:6a:d4:45:f0:19"
         trim: true
         lowercase_on_submit: true
+        format: mac_style_serial
+        pattern: "^[0-9a-f]{2}(:[0-9a-f]{2}){5}$"
+        valid_examples:
+          - "aa:bb:cc:dd:ee:ff"
         help_text: Device serial number, usually MAC-style.
         validation:
           - rule: required
             message: Device serial is required.
+          - rule: mac_style_serial_pattern
+            message: Enter a MAC-style serial like aa:bb:cc:dd:ee:ff.
       controller_endpoint:
         label: Controller Endpoint
         type: text
@@ -119,6 +125,8 @@ forms:
     submit_behavior:
       create: call_add_device
       edit: call_update_device
+      preconditions:
+        - validate_mac_serial_before_request
     success_behavior:
       - show_success_toast
       - refresh_device_list
@@ -246,7 +254,16 @@ api_bindings:
     path_template: /v1/device/{serial}
     auth: keycloak-dpop
     path_params:
-      serial: url_encoded_string
+      serial: normalized_mac_serial_preserve_colons
+    path_rules:
+      - normalize_with_trim_and_lowercase
+      - validate_mac_serial_before_request
+      - preserve_colon_character_in_path_segment
+      - preserve_colons_for_delete_serial
+      - use_exact_same_path_for_dpop_htu_and_fetch_request
+    notes:
+      - Preserve ':' in the DELETE path segment for DPoP htu parity with backend r.URL.Path comparison.
+      - Reject invalid serial values before sending DELETE.
     request_body: none
     confirmation_required: true
     success_status:

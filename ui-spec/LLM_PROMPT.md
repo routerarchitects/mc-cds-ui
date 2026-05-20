@@ -67,6 +67,20 @@ DPoP: <fresh_dpop_proof_jwt>
 - Include `ath` as base64url(SHA-256(access_token)) for CDS resource requests.
 - Send `Authorization: DPoP <access_token>` and `DPoP: <proof>` for every Admin API request.
 - Use same-origin API calls by default: `/v1/device` and `/v1/device/{serial}`.
+- Normalize serial with `trim().toLowerCase()`.
+- Validate serial with `^[0-9a-f]{2}(:[0-9a-f]{2}){5}$`.
+- This validation applies before `POST`, `PUT`, and `DELETE` requests.
+- Valid example: `aa:bb:cc:dd:ee:ff`.
+- Reject `aa/bb`, `aa?x=1`, `aa#x`, `aa%2fbb`, `aa bb`, `device-001`, `serial123`, `abc_def`.
+- For `DELETE /v1/device/{serial}`, normalize serial with `trim().toLowerCase()` and preserve MAC-style `:` in the path segment.
+- Build delete path as `/v1/device/${normalizedSerial}` while preserving MAC-style colon characters.
+- Resolve the normalized delete path against the configured API origin or current origin to create the exact browser request URL.
+- Use that same absolute external URL, without query or fragment, for both DPoP `htu` proof generation and the fetch DELETE request.
+- Validate serial before add/update/delete requests. If invalid, show a clear inline validation message and do not send the API request.
+- For `GET /v1/device`, parse JSON when a response body is present. If JSON response is an array, use it; if `null` or `undefined`, treat it as `[]`.
+- For `GET /v1/device`, if a successful response has an empty body, treat it as `[]` for compatibility.
+- For `GET /v1/device`, if JSON response shape is neither array nor nullish, raise/show a fixed safe error such as `Unexpected response from server.`.
+- Keep device-list state array-safe so filter/sort/map/spread/render logic only operates on arrays.
 - Do not add CORS workarounds in the frontend.
 - Handle loading, empty list, success, error, 401, 403, 404, 409, 413, 500, and network failures.
 - Add logout support.
@@ -110,5 +124,17 @@ Include:
 - CSS styling
 - `.env.example`
 - README with setup, build, and integration instructions
+- Unit tests and/or integration tests that cover:
+  - OAuth state/nonce/PKCE callback validation
+  - DPoP key lifecycle and proof claims (`htm`, `htu`, `iat`, `ath`, fresh `jti`)
+  - memory-only token storage expectations
+  - CRUD API client request and error handling behavior
+  - serial and controller endpoint validation behavior
+  - device list array/null/invalid/empty-body compatibility handling
+  - add/update/delete UI flows
+  - safe escaped rendering of API/auth/server-driven messages
+  - mock mode safety (never calling real CDS APIs)
+  - config validation behavior
+- Verification steps showing successful production build with `npm run build`
 
 Do not modify the CDS backend unless explicitly asked. Generate only the Admin UI frontend.

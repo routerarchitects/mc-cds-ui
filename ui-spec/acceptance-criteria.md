@@ -54,92 +54,123 @@
 47. Device list uses `GET /v1/device`.
 48. Add device uses `POST /v1/device` with JSON body.
 49. Update device uses `PUT /v1/device` with JSON body.
-50. Delete device uses `DELETE /v1/device/{serial}` with URL-encoded serial and no JSON body.
-51. API base URL defaults to same-origin when `VITE_CDS_API_BASE_URL` is empty.
-52. The UI handles `204 No Content` responses correctly.
-53. The UI displays useful messages for 400, 401, 403, 404, 409, 413, 500, and network failures.
-54. The UI shows an access denied state for 403 responses.
-55. API/auth error UI uses fixed safe messages or escaped plain text only.
+50. Delete device uses `DELETE /v1/device/{serial}` with no JSON body.
+51. Serial is normalized with `trim().toLowerCase()`.
+52. Serial matches `^[0-9a-f]{2}(:[0-9a-f]{2}){5}$`.
+54. Serial input accepts `aa:bb:cc:dd:ee:ff`.
+55. Serial input rejects `aa/bb`, `aa?x=1`, `aa#x`, `aa%2fbb`, `aa bb`, `device-001`, `serial123`, and `abc_def`.
+56. POST blocks request when serial validation fails.
+57. PUT blocks request when serial validation fails.
+58. DELETE blocks request when serial validation fails.
+59. Delete path preserves `:` characters for valid MAC serials, for example `/v1/device/aa:bb:cc:dd:ee:ff`.
+60. The normalized delete path is resolved to the exact browser request URL, and that same absolute external URL (without query/fragment) is used for both DPoP proof `htu` generation and the fetch DELETE request.
+61. Delete with a valid MAC-style serial does not fail with `dpop_htu_mismatch` when auth/session are valid.
+62. API base URL defaults to same-origin when `VITE_CDS_API_BASE_URL` is empty.
+63. The UI handles `204 No Content` responses correctly.
+64. The UI displays useful messages for 400, 401, 403, 404, 409, 413, 500, and network failures.
+65. The UI shows an access denied state for 403 responses.
+66. API/auth error UI uses fixed safe messages or escaped plain text only.
+67. For `GET /v1/device`, if response JSON is an array, the UI uses it as the device list.
+68. For `GET /v1/device`, if response JSON is `null` or `undefined`, the UI treats it as `[]`.
+69. For `GET /v1/device`, invalid non-array/non-null response shapes produce a fixed safe error such as `Unexpected response from server.`.
+70. The UI does not crash when `GET /v1/device` returns `null`.
+71. Device-list state remains array-safe for filtering, sorting, mapping, spreading, and rendering.
+72. For `GET /v1/device`, a successful empty response body is treated as `[]` for compatibility.
 
 ## Device Dashboard
 
-56. The dashboard loads the device list on initial render after authentication.
-57. The dashboard shows a loading state while devices are being fetched.
-58. The dashboard shows an empty state when no devices exist.
-59. The dashboard displays each device with `serial` and `controller_endpoint`.
-60. The table supports refresh.
-61. The table supports basic search/filter by serial or controller endpoint.
-62. The table supports sorting by serial and controller endpoint.
-63. The dashboard displays current auth mode and DPoP-ready state in a non-sensitive way.
-64. The dashboard shows a `Last refresh` card instead of an API base URL card.
-65. `Last refresh` displays `Never` before the first successful device list load.
-66. `Last refresh` updates after initial successful list load, manual Refresh, and the successful list refresh following add, update, or delete.
-67. Failed list requests do not update `Last refresh`.
+73. The dashboard loads the device list on initial render after authentication.
+74. The dashboard shows a loading state while devices are being fetched.
+75. The dashboard shows an empty state when no devices exist.
+76. The dashboard displays each device with `serial` and `controller_endpoint`.
+77. The table supports refresh.
+78. The table supports basic search/filter by serial or controller endpoint.
+79. The table supports sorting by serial and controller endpoint.
+80. The dashboard displays current auth mode and DPoP-ready state in a non-sensitive way.
+81. The dashboard shows a `Last refresh` card instead of an API base URL card.
+82. `Last refresh` displays `Never` before the first successful device list load.
+83. `Last refresh` updates after initial successful list load, manual Refresh, and the successful list refresh following add, update, or delete.
+84. Failed list requests do not update `Last refresh`.
 
 ## Add Device
 
-68. The add form contains required fields for `serial` and `controller_endpoint`.
-69. The form prevents submission when required fields are empty.
-70. Inputs are trimmed before submit.
-71. Serial is lower-cased before submit.
-72. `controller_endpoint` must be a hostname/cloud endpoint only, such as `openwifi3.routerarchitects.com`.
-73. `controller_endpoint` must be at most 253 characters.
-74. `controller_endpoint` rejects port, scheme, path, query, fragment, and credentials.
-75. On successful add, the UI shows a success message.
-76. On successful add, the device list refreshes.
-77. On successful add, the form resets.
-78. A 409 conflict shows a clear owner/conflict message.
+85. The add form contains required fields for `serial` and `controller_endpoint`.
+86. The form prevents submission when required fields are empty.
+87. Inputs are trimmed before submit.
+88. Serial is lower-cased before submit.
+89. `controller_endpoint` must be a hostname/cloud endpoint only, such as `openwifi3.routerarchitects.com`.
+90. `controller_endpoint` must be at most 253 characters.
+91. `controller_endpoint` rejects port, scheme, path, query, fragment, and credentials.
+92. On successful add, the UI shows a success message.
+93. On successful add, the device list refreshes.
+94. On successful add, the form resets.
+95. A 409 conflict shows a clear owner/conflict message.
 
 ## Update Device
 
-79. Clicking Edit fills the form with the selected device.
-80. In edit mode, the primary button says `Update Device`.
-81. In edit mode, the user can cancel and return to create mode.
-82. On successful update, the UI shows a success message.
-83. On successful update, the device list refreshes.
-84. On successful update, the form returns to create mode.
-85. A 404 during update shows a device-not-found message.
+96. Clicking Edit fills the form with the selected device.
+97. In edit mode, the primary button says `Update Device`.
+98. In edit mode, the user can cancel and return to create mode.
+99. On successful update, the UI shows a success message.
+100. On successful update, the device list refreshes.
+101. On successful update, the form returns to create mode.
+102. A 404 during update shows a device-not-found message.
 
 ## Delete Device
 
-86. Clicking Delete opens a confirmation dialog.
-87. The dialog includes the selected device serial.
-88. The delete request is not sent until the user confirms.
-89. Delete uses `DELETE /v1/device/{serial}` and URL-encodes the serial.
-90. Delete sends no JSON body.
-91. On successful delete, the dialog closes.
-92. On successful delete, the UI shows a success message.
-93. On successful delete, the device list refreshes.
-94. On delete failure, the UI shows an error message.
+103. Clicking Delete opens a confirmation dialog.
+104. The dialog includes the selected device serial.
+105. The delete request is not sent until the user confirms.
+106. Delete uses `DELETE /v1/device/{serial}` with normalized lowercase serial preserving `:`.
+107. Delete sends no JSON body.
+108. On successful delete, the dialog closes.
+109. On successful delete, the UI shows a success message.
+110. On successful delete, the device list refreshes.
+111. On delete failure, the UI shows an error message.
 
 ## Configuration
 
-95. Frontend configuration is read from Vite environment variables.
-96. The generated app includes a `.env.example` with required frontend values.
-97. The generated app includes README setup instructions.
-98. The app supports local development with Vite.
-99. The app supports same-origin deployment behind Nginx.
-100. The app does not require backend client secrets.
-101. The app does not require CORS in the final Nginx deployment.
-102. Mock mode never calls real CDS APIs and uses mocked responses only.
-103. If `VITE_AUTH_MODE=mock` is used outside localhost/dev builds, app startup fails closed.
+112. Frontend configuration is read from Vite environment variables.
+113. The generated app includes a `.env.example` with required frontend values.
+114. The generated app includes README setup instructions.
+115. The app supports local development with Vite.
+116. The app supports same-origin deployment behind Nginx.
+117. The app does not require backend client secrets.
+118. The app does not require CORS in the final Nginx deployment.
+119. Mock mode never calls real CDS APIs and uses mocked responses only.
+120. If `VITE_AUTH_MODE=mock` is used outside localhost/dev builds, app startup fails closed.
 
 ## Code Quality and Security
 
-104. Code is written in TypeScript.
-105. Device and API types are defined clearly.
-106. Keycloak/OIDC auth logic is isolated from CRUD UI components.
-107. DPoP crypto/proof logic is isolated in a dedicated module.
-108. API calls are centralized in a client module.
-109. Components are modular and reusable.
-110. The app can be built with `npm run build`.
-111. The app can be run locally with `npm run dev`.
-112. The generated code includes clear error handling.
-113. The generated code includes accessible labels for form inputs.
-114. The generated UI is clean, responsive, and usable on laptop/desktop screens.
-115. The app does not log raw access tokens, refresh tokens, or DPoP proofs.
-116. The app does not store access tokens, refresh tokens, or DPoP private keys in long-lived `localStorage`.
-117. The app does not use `dangerouslySetInnerHTML` for auth/API/server-driven messages.
-118. The app never renders API/auth error payloads as HTML.
-119. Production CSP includes at minimum `default-src 'self'`, `script-src 'self'`, `object-src 'none'`, `base-uri 'self'`, `frame-ancestors 'none'`, and `connect-src 'self'`.
-120. If Keycloak is on a separate origin, CSP `connect-src` allows only the configured Keycloak issuer origin in addition to `'self'`; it does not use wildcard origins.
+121. Code is written in TypeScript.
+122. Device and API types are defined clearly.
+123. Keycloak/OIDC auth logic is isolated from CRUD UI components.
+124. DPoP crypto/proof logic is isolated in a dedicated module.
+125. API calls are centralized in a client module.
+126. Components are modular and reusable.
+127. The app can be built with `npm run build`.
+128. The app can be run locally with `npm run dev`.
+129. The generated code includes clear error handling.
+130. The generated code includes accessible labels for form inputs.
+131. The generated UI is clean, responsive, and usable on laptop/desktop screens.
+132. The app does not log raw access tokens, refresh tokens, or DPoP proofs.
+133. The app does not store access tokens, refresh tokens, or DPoP private keys in long-lived `localStorage`.
+134. The app does not use `dangerouslySetInnerHTML` for auth/API/server-driven messages.
+135. The app never renders API/auth error payloads as HTML.
+136. Production CSP includes at minimum `default-src 'self'`, `script-src 'self'`, `object-src 'none'`, `base-uri 'self'`, `frame-ancestors 'none'`, and `connect-src 'self'`.
+137. If Keycloak is on a separate origin, CSP `connect-src` allows only the configured Keycloak issuer origin in addition to `'self'`; it does not use wildcard origins.
+
+## Testing Requirements
+
+138. The generated UI includes automated unit tests and/or integration tests for auth, API client behavior, validation, UI flows, safety, and mock mode.
+139. Tests cover OAuth callback validation for `state`, `nonce`, and PKCE transaction integrity checks.
+140. Tests cover DPoP key lifecycle across login/callback/logout flows and DPoP proof claim correctness (`htm`, `htu`, `iat`, `ath`, fresh `jti`).
+141. Tests verify tokens remain memory-only by default and are not persisted to long-lived `localStorage`.
+142. Tests cover CRUD API client calls, request construction, and mapped error handling across expected status classes.
+143. Tests cover serial and controller endpoint validation behavior, including request blocking on invalid input.
+144. Tests cover device list handling for array responses, `null`/`undefined`, invalid shapes, and compatibility handling of successful empty response body.
+145. Tests cover add/update/delete UI flows, including success refresh behavior and failure messaging.
+146. Tests verify safe escaped rendering behavior for API/auth/server-provided messages and no HTML injection rendering.
+147. Tests verify mock mode never calls real CDS APIs.
+148. Tests include config validation behavior for required/invalid environment configurations.
+149. CI/local verification includes successful production build with `npm run build`.
