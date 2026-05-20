@@ -56,6 +56,28 @@ function requireValidIssuerUrl(value: string): string {
   return value;
 }
 
+function requireValidApiBaseUrl(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    throw new Error('VITE_CDS_API_BASE_URL must be empty or a valid absolute http(s) origin.');
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error('VITE_CDS_API_BASE_URL must be empty or a valid absolute http(s) origin.');
+  }
+  if (!parsed.hostname || parsed.username || parsed.password || parsed.search || parsed.hash) {
+    throw new Error('VITE_CDS_API_BASE_URL must be empty or a valid absolute http(s) origin.');
+  }
+  if (parsed.pathname && parsed.pathname !== '/') {
+    throw new Error('VITE_CDS_API_BASE_URL must be empty or a valid absolute http(s) origin.');
+  }
+  return parsed.origin;
+}
+
 export function getConfig(): AppConfig {
   const authMode = (env('VITE_AUTH_MODE') || 'keycloak-dpop') as AuthMode;
   if (authMode !== 'keycloak-dpop' && authMode !== 'mock') {
@@ -76,7 +98,7 @@ export function getConfig(): AppConfig {
     keycloakIssuer: issuer,
     keycloakClientId: env('VITE_KEYCLOAK_CLIENT_ID') || 'cds-admin-ui',
     keycloakScope: env('VITE_KEYCLOAK_SCOPE') || 'openid profile email',
-    cdsApiBaseUrl: (env('VITE_CDS_API_BASE_URL') || '').replace(/\/+$/, ''),
+    cdsApiBaseUrl: requireValidApiBaseUrl(env('VITE_CDS_API_BASE_URL') || ''),
     redirectPath: requireRelativePath(env('VITE_KEYCLOAK_REDIRECT_PATH'), '/callback'),
     postLogoutPath: requireRelativePath(env('VITE_KEYCLOAK_POST_LOGOUT_PATH'), '/')
   };

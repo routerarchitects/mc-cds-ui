@@ -2,8 +2,8 @@ import { createDpopProof, generateExportableDpopKeyPair, importRuntimeDpopKeyPai
 import { randomBase64url } from '../crypto/base64url';
 import { createPkcePair } from '../crypto/pkce';
 import { buildAbsoluteSameOriginUrl, getConfig } from '../utils/config';
-import { getAccessTokenExpiry, userFromIdToken, validateIdTokenNonce } from './jwt';
-import type { AuthTransaction, OidcDiscovery, TokenSet } from './types';
+import { getAccessTokenExpiry, userFromClaims, validateIdToken } from './jwt';
+import type { AuthTransaction, OidcDiscovery, TokenSet, UserInfo } from './types';
 
 const TX_KEY = 'cds_admin_auth_tx';
 const DPOP_KEY = 'cds_admin_dpop_jwk';
@@ -14,7 +14,7 @@ export async function discoverIssuer(issuer: string): Promise<OidcDiscovery> {
     throw new Error('Unable to load Keycloak discovery document.');
   }
   const discovery = (await response.json()) as OidcDiscovery;
-  if (!discovery.authorization_endpoint || !discovery.token_endpoint) {
+  if (!discovery.authorization_endpoint || !discovery.token_endpoint || !discovery.jwks_uri) {
     throw new Error('Keycloak discovery document is missing required endpoints.');
   }
   return discovery;
@@ -136,39 +136,42 @@ export async function beginLogin(): Promise<void> {
   window.location.assign(authorizationUrl.toString());
 }
 
-export async function handleCallback(): Promise<{ tokens: TokenSet; dpop: RuntimeDpopKeyPair; discovery: OidcDiscovery }> {
+export async function handleCallback(): Promise<{ tokens: TokenSet; dpop: RuntimeDpopKeyPair; discovery: OidcDiscovery; user: UserInfo }> {
   const config = getConfig();
-  const params = new URLSearchParams(window.location.search);
-  assertNoDuplicateParams(params);
-  const code = params.get('code');
-  const returnedState = params.get('state');
-  if (!code || !returnedState) throw new Error('OAuth callback is missing required code or state.');
-
-  const tx = loadTransaction();
-  if (tx.state !== returnedState) {
-    clearAuthTransaction();
-    clearRedirectDpopKey();
-    throw new Error('OAuth state validation failed.');
-  }
-
-  const exportedDpop = restoreAndClearRedirectDpopKey();
-  const dpop = await importRuntimeDpopKeyPair(exportedDpop);
-  const discovery = await discoverIssuer(config.keycloakIssuer);
-  const body = new URLSearchParams({
-    grant_type: 'authorization_code',
-    code,
-    redirect_uri: buildAbsoluteSameOriginUrl(config.redirectPath),
-    client_id: config.keycloakClientId,
-    code_verifier: tx.codeVerifier
-  });
-
   try {
+    const params = new URLSearchParams(window.location.search);
+    assertNoDuplicateParams(params);
+    const code = params.get('code');
+    const returnedState = params.get('state');
+    if (!code || !returnedState) throw new Error('OAuth callback is missing required code or state.');
+
+    const tx = loadTransaction();
+    if (tx.state !== returnedState) throw new Error('OAuth state validation failed.');
+
+    const exportedDpop = restoreAndClearRedirectDpopKey();
+    const dpop = await importRuntimeDpopKeyPair(exportedDpop);
+    const discovery = await discoverIssuer(config.keycloakIssuer);
+    const body = new URLSearchParams({
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: buildAbsoluteSameOriginUrl(config.redirectPath),
+      client_id: config.keycloakClientId,
+      code_verifier: tx.codeVerifier
+    });
+
     const payload = await tokenRequestWithDpop(discovery, dpop, body);
     const tokens = parseTokens(payload);
-    validateIdTokenNonce(tokens.idToken, tx.nonce);
+    const claims = await validateIdToken(tokens.idToken, {
+      issuer: config.keycloakIssuer,
+      clientId: config.keycloakClientId,
+      nonce: tx.nonce,
+      jwksUri: discovery.jwks_uri
+    });
+    const user = userFromClaims(claims);
     clearAuthTransaction();
+    clearRedirectDpopKey();
     window.history.replaceState({}, document.title, window.location.origin + '/');
-    return { tokens, dpop, discovery };
+    return { tokens, dpop, discovery, user };
   } catch (error) {
     clearAuthTransaction();
     clearRedirectDpopKey();
@@ -176,7 +179,11 @@ export async function handleCallback(): Promise<{ tokens: TokenSet; dpop: Runtim
   }
 }
 
-export async function refreshTokens(discovery: OidcDiscovery, dpop: RuntimeDpopKeyPair, refreshToken: string): Promise<TokenSet> {
+export async function refreshTokens(
+  discovery: OidcDiscovery,
+  dpop: RuntimeDpopKeyPair,
+  refreshToken: string
+): Promise<{ tokens: TokenSet; user: UserInfo }> {
   const config = getConfig();
   const payload = await tokenRequestWithDpop(
     discovery,
@@ -187,7 +194,13 @@ export async function refreshTokens(discovery: OidcDiscovery, dpop: RuntimeDpopK
       client_id: config.keycloakClientId
     })
   );
-  return parseTokens(payload);
+  const tokens = parseTokens(payload);
+  const claims = await validateIdToken(tokens.idToken, {
+    issuer: config.keycloakIssuer,
+    clientId: config.keycloakClientId,
+    jwksUri: discovery.jwks_uri
+  });
+  return { tokens, user: userFromClaims(claims) };
 }
 
 export async function keycloakLogout(discovery: OidcDiscovery, dpop: RuntimeDpopKeyPair, tokens: TokenSet): Promise<void> {
@@ -213,8 +226,4 @@ export async function keycloakLogout(discovery: OidcDiscovery, dpop: RuntimeDpop
     const nonce = getDpopNonce(response);
     if (nonce) await doRequest(nonce);
   }
-}
-
-export function getUserFromTokens(tokens: TokenSet) {
-  return userFromIdToken(tokens.idToken);
 }

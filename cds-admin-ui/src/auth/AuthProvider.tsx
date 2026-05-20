@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { createDpopProof } from '../crypto/dpop';
 import { getConfig } from '../utils/config';
-import { beginLogin, clearAuthTransaction, clearRedirectDpopKey, getUserFromTokens, handleCallback, keycloakLogout, refreshTokens } from './oidc';
+import { beginLogin, clearAuthTransaction, clearRedirectDpopKey, handleCallback, keycloakLogout, refreshTokens } from './oidc';
 import type { AuthContextValue, RuntimeSession } from './types';
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -46,9 +46,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const isCallback = window.location.pathname === config.redirectPath && window.location.search.includes('code=');
         if (isCallback) {
-          const { tokens, dpop, discovery } = await handleCallback();
+          const { tokens, dpop, discovery, user } = await handleCallback();
           if (!cancelled) {
-            setRuntimeSession({ tokens, dpop, discovery, user: getUserFromTokens(tokens) });
+            setRuntimeSession({ tokens, dpop, discovery, user });
           }
         }
       } catch (err) {
@@ -103,8 +103,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error('Session expired. Please log in again.');
     }
     try {
-      const refreshed = await refreshTokens(current.discovery, current.dpop, current.tokens.refreshToken);
-      const next = { ...current, tokens: refreshed, user: getUserFromTokens(refreshed) };
+      const { tokens: refreshed, user } = await refreshTokens(current.discovery, current.dpop, current.tokens.refreshToken);
+      const next = { ...current, tokens: refreshed, user };
       setRuntimeSession(next);
       return refreshed.accessToken;
     } catch {

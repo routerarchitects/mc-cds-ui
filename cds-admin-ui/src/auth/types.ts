@@ -3,6 +3,7 @@ import type { RuntimeDpopKeyPair } from '../crypto/dpop';
 export interface OidcDiscovery {
   authorization_endpoint: string;
   token_endpoint: string;
+  jwks_uri: string;
   end_session_endpoint?: string;
   issuer: string;
 }
