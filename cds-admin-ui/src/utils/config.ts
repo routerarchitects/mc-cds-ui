@@ -40,6 +40,22 @@ function validateMockMode(authMode: AuthMode): void {
   }
 }
 
+function requireValidIssuerUrl(value: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error('VITE_KEYCLOAK_ISSUER must be a valid absolute http(s) URL.');
+  }
+  if ((parsed.protocol !== 'http:' && parsed.protocol !== 'https:') || !parsed.hostname) {
+    throw new Error('VITE_KEYCLOAK_ISSUER must be a valid absolute http(s) URL.');
+  }
+  if (parsed.username || parsed.password || parsed.search || parsed.hash) {
+    throw new Error('VITE_KEYCLOAK_ISSUER must be a valid absolute http(s) URL.');
+  }
+  return value;
+}
+
 export function getConfig(): AppConfig {
   const authMode = (env('VITE_AUTH_MODE') || 'keycloak-dpop') as AuthMode;
   if (authMode !== 'keycloak-dpop' && authMode !== 'mock') {
@@ -50,6 +66,9 @@ export function getConfig(): AppConfig {
   const issuer = (env('VITE_KEYCLOAK_ISSUER') || '').replace(/\/+$/, '');
   if (authMode === 'keycloak-dpop' && !issuer) {
     throw new Error('VITE_KEYCLOAK_ISSUER is required for keycloak-dpop mode.');
+  }
+  if (authMode === 'keycloak-dpop') {
+    requireValidIssuerUrl(issuer);
   }
 
   return {

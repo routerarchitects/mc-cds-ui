@@ -23,6 +23,29 @@ describe('config validation', () => {
     expect(() => getConfig()).toThrow('VITE_KEYCLOAK_ISSUER is required for keycloak-dpop mode.');
   });
 
+  it('rejects invalid keycloak issuer url format', async () => {
+    vi.stubEnv('DEV', true);
+    vi.stubEnv('VITE_AUTH_MODE', 'keycloak-dpop');
+    vi.stubEnv('VITE_KEYCLOAK_ISSUER', 'not-a-url');
+    vi.stubGlobal('window', { location: { hostname: 'localhost', origin: 'http://localhost:3000' } });
+    const { getConfig } = await import('../utils/config');
+    expect(() => getConfig()).toThrow('VITE_KEYCLOAK_ISSUER must be a valid absolute http(s) URL.');
+  });
+
+  it.each([
+    'ftp://issuer.example.com',
+    'https://issuer.example.com?x=1',
+    'https://issuer.example.com#frag',
+    'https://user:pass@issuer.example.com'
+  ])('rejects disallowed issuer variant: %s', async (issuer) => {
+    vi.stubEnv('DEV', true);
+    vi.stubEnv('VITE_AUTH_MODE', 'keycloak-dpop');
+    vi.stubEnv('VITE_KEYCLOAK_ISSUER', issuer);
+    vi.stubGlobal('window', { location: { hostname: 'localhost', origin: 'http://localhost:3000' } });
+    const { getConfig } = await import('../utils/config');
+    expect(() => getConfig()).toThrow('VITE_KEYCLOAK_ISSUER must be a valid absolute http(s) URL.');
+  });
+
   it('defaults api base to same-origin mode when env is empty', async () => {
     vi.stubEnv('DEV', true);
     vi.stubEnv('VITE_AUTH_MODE', 'keycloak-dpop');

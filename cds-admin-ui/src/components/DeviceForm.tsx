@@ -21,7 +21,11 @@ export function DeviceForm({ selectedDevice, isSubmitting, onSubmit, onCancelEdi
       setSerial(selectedDevice.serial);
       setControllerEndpoint(selectedDevice.controller_endpoint);
       setErrors({});
+      return;
     }
+    setSerial('');
+    setControllerEndpoint('');
+    setErrors({});
   }, [selectedDevice]);
 
   const reset = () => {
