@@ -1,0 +1,4 @@
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; connect-src 'self' https://auth.example.com
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer

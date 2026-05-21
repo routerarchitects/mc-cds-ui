@@ -1,0 +1,30 @@
+name: Admin UI CI
+
+on:
+  pull_request:
+    paths:
+      - "cds-admin-ui/**"
+      - ".github/workflows/admin-ui-ci.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "cds-admin-ui/**"
+      - ".github/workflows/admin-ui-ci.yml"
+
+jobs:
+  test-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cds-admin-ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: cds-admin-ui/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
