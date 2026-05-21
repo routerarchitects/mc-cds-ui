@@ -15,23 +15,6 @@ export function getAccessTokenExpiry(accessToken: string): number {
   return claims.exp * 1000;
 }
 
-export function userFromIdToken(idToken: string): UserInfo {
-  const claims = parseJwtPayload<Record<string, unknown>>(idToken);
-  return {
-    subject: typeof claims.sub === 'string' ? claims.sub : undefined,
-    name: typeof claims.name === 'string' ? claims.name : undefined,
-    email: typeof claims.email === 'string' ? claims.email : undefined,
-    preferredUsername: typeof claims.preferred_username === 'string' ? claims.preferred_username : undefined
-  };
-}
-
-export function validateIdTokenNonce(idToken: string, expectedNonce: string): void {
-  const claims = parseJwtPayload<{ nonce?: string }>(idToken);
-  if (!claims.nonce || claims.nonce !== expectedNonce) {
-    throw new Error('ID token nonce validation failed.');
-  }
-}
-
 type IdTokenClaims = Record<string, unknown> & {
   iss?: string;
   aud?: string | string[];
